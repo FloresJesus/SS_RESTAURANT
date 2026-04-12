@@ -3,11 +3,11 @@ import { ref } from 'vue'
 
 export const useRestaurantStore = defineStore('restaurant', () => {
   const menuItems = ref([
-    { id: 1, name: 'Lomo Saltado', category: 'Platos Principales', price: 180, description: 'Carne salteada con cebolla, tomate y papas fritas.', available: true },
-    { id: 2, name: 'Ceviche Mixto', category: 'Entradas', price: 120, description: 'Pescado y mariscos en salsa de limón y ají.', available: true },
-    { id: 3, name: 'Tiradito', category: 'Entradas', price: 110, description: 'Filete de pescado en salsa de ají amarillo y leche de tigre.', available: true },
-    { id: 4, name: 'Suspiro Limeño', category: 'Postres', price: 75, description: 'Dulce de leche con merengue y canela.', available: true },
-    { id: 5, name: 'Limonada', category: 'Bebidas', price: 45, description: 'Refrescante limonada con hierbabuena.', available: true }
+    { id: 1, name: 'Lomo Saltado', category: 'Platos Principales', price: 0, description: 'Carne salteada con cebolla, tomate y papas fritas.', available: true },
+    { id: 2, name: 'Ceviche Mixto', category: 'Entradas', price: 0, description: 'Pescado y mariscos en salsa de limón y ají.', available: true },
+    { id: 3, name: 'Tiradito', category: 'Entradas', price: 0, description: 'Filete de pescado en salsa de ají amarillo y leche de tigre.', available: true },
+    { id: 4, name: 'Suspiro Limeño', category: 'Postres', price: 0, description: 'Dulce de leche con merengue y canela.', available: true },
+    { id: 5, name: 'Limonada', category: 'Bebidas', price: 0, description: 'Refrescante limonada con hierbabuena.', available: true }
   ])
 
   const orders = ref([

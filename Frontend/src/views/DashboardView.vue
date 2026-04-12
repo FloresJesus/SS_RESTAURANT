@@ -52,7 +52,7 @@ const stats = computed(() => {
 })
 
 const formatCurrency = (value) => {
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value)
+  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'BOB' }).format(value)
 }
 
 const lineChartData = computed(() => ({
