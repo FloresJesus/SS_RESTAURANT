@@ -4,6 +4,7 @@ require("dotenv").config()
 
 const authRoutes = require("./routes/authRoutes")
 const userRoutes = require("./routes/userRoutes")
+const customerRoutes = require("./routes/customerRoutes")
 const menuRoutes = require("./routes/menuRoutes")   
 
 const app = express()
@@ -13,6 +14,7 @@ app.use(express.json())
 
 app.use("/api/auth", authRoutes)
 app.use("/api/users", userRoutes)
+app.use("/api/customers", customerRoutes)
 
 const PORT = 3000
 
