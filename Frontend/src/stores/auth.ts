@@ -2,7 +2,11 @@ import { defineStore } from "pinia"
 
 interface User {
   id: number
+  nombre: string
+  apellido: string
   email: string
+  rol: string
+  activo: boolean
 }
 
 interface LoginResponse {

@@ -67,10 +67,14 @@ const handleLogout = () => {
       <!-- User Section -->
       <div class="sidebar-footer">
         <div class="user-section">
-          <div class="user-avatar">{{ authStore.user?.avatar }}</div>
+          <div class="user-avatar">
+            {{ authStore.user ? (authStore.user.nombre[0] + authStore.user.apellido[0]).toUpperCase() : '?' }}
+          </div>
           <div v-if="sidebarOpen" class="user-info">
-            <p class="user-name">{{ authStore.user?.name }}</p>
-            <p class="user-role">{{ authStore.user?.role }}</p>
+            <p class="user-name">
+              {{ authStore.user ? `${authStore.user.nombre} ${authStore.user.apellido}` : 'Usuario no logueado' }}
+            </p>
+            <p class="user-role">{{ authStore.user?.rol || 'Sin rol' }}</p>
           </div>
           <button 
             v-if="sidebarOpen"

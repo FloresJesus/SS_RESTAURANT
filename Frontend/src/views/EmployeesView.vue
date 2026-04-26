@@ -1,15 +1,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRestaurantStore } from '@/stores/restaurant'
 import { useUsersStore } from '@/stores/users'
 
-const store = useRestaurantStore()
-//cargar empleados
 const usersStore = useUsersStore()
-onMounted(async () => {
-  await usersStore.fetchUsers()
-})
-const employees = computed(() => usersStore.users)
 
 const searchQuery = ref('')
 const selectedRole = ref('all')
@@ -19,26 +12,33 @@ const editingEmployee = ref(null)
 const roles = [
   { value: 'all', label: 'Todos' },
   { value: 'admin', label: 'Administrador' },
-  { value: 'waiter', label: 'Mesero' },
-  { value: 'kitchen', label: 'Cocina' }
+  { value: 'camarero', label: 'Camarero' },
+  { value: 'cocina', label: 'Cocina' }
 ]
 
-const shifts = ['Manana', 'Tarde', 'Noche']
-
 const formData = ref({
-  name: '',
+  firstName: '',
+  lastName: '',
   email: '',
-  phone: '',
-  role: 'waiter',
-  shift: 'Manana',
-  status: 'active'
+  rol: 'camarero',
+  status: 'active',
+  password: ''
+})
+
+const employees = computed(() => {
+  return usersStore.users.map(user => ({
+    ...user,
+    status: user.active ? 'active' : 'inactive'
+  }))
 })
 
 const filteredEmployees = computed(() => {
-  return store.employees.filter(employee => {
-    const matchesSearch = employee.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                          employee.email.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchesRole = selectedRole.value === 'all' || employee.role === selectedRole.value
+  const searchText = searchQuery.value.toLowerCase()
+
+  return employees.value.filter(employee => {
+    const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase()
+    const matchesSearch = fullName.includes(searchText) || employee.email.toLowerCase().includes(searchText)
+    const matchesRole = selectedRole.value === 'all' || employee.rol === selectedRole.value
     return matchesSearch && matchesRole
   })
 })
@@ -46,36 +46,49 @@ const filteredEmployees = computed(() => {
 const getRoleInfo = (role) => {
   const info = {
     admin: { label: 'Administrador', color: 'badge-primary' },
-    waiter: { label: 'Mesero', color: 'badge-success' },
-    kitchen: { label: 'Cocina', color: 'badge-warning' }
+    camarero: { label: 'Camarero', color: 'badge-success' },
+    cocina: { label: 'Cocina', color: 'badge-warning' }
   }
   return info[role] || { label: role, color: '' }
 }
 
 const stats = computed(() => ({
-  total: store.employees.length,
-  active: store.employees.filter(e => e.status === 'active').length,
-  admins: store.employees.filter(e => e.role === 'admin').length,
-  waiters: store.employees.filter(e => e.role === 'waiter').length,
-  kitchen: store.employees.filter(e => e.role === 'kitchen').length
+  total: employees.value.length,
+  active: employees.value.filter(e => e.status === 'active').length,
+  admins: employees.value.filter(e => e.rol === 'admin').length,
+  camareros: employees.value.filter(e => e.rol === 'camarero').length,
+  cocina: employees.value.filter(e => e.rol === 'cocina').length
 }))
+
+const loadEmployees = async () => {
+  await usersStore.fetchUsers()
+}
+
+onMounted(loadEmployees)
 
 const openAddModal = () => {
   editingEmployee.value = null
   formData.value = {
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
-    phone: '',
-    role: 'waiter',
-    shift: 'Manana',
-    status: 'active'
+    rol: 'camarero',
+    status: 'active',
+    password: ''
   }
   showModal.value = true
 }
 
 const openEditModal = (employee) => {
   editingEmployee.value = employee
-  formData.value = { ...employee }
+  formData.value = {
+    firstName: employee.firstName,
+    lastName: employee.lastName,
+    email: employee.email,
+    rol: employee.rol,
+    status: employee.active ? 'active' : 'inactive',
+    password: ''
+  }
   showModal.value = true
 }
 
@@ -84,19 +97,68 @@ const closeModal = () => {
   editingEmployee.value = null
 }
 
-const saveEmployee = () => {
-  if (editingEmployee.value) {
-    store.updateEmployee(editingEmployee.value.id, { ...formData.value })
-  } else {
-    store.addEmployee({ ...formData.value })
+const saveEmployee = async () => {
+  const payload = {
+    nombre: formData.value.firstName,
+    apellido: formData.value.lastName,
+    correo: formData.value.email,
+    rol: formData.value.rol,
+    activo: formData.value.status === 'active'
   }
-  closeModal()
+
+  try {
+    let response
+    if (editingEmployee.value) {
+      response = await fetch(`http://localhost:3000/api/users/${editingEmployee.value.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+    } else {
+      response = await fetch('http://localhost:3000/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          password: formData.value.password
+        })
+      })
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null)
+      throw new Error(errorData?.message || 'Error al guardar empleado')
+    }
+
+    await loadEmployees()
+    closeModal()
+  } catch (error) {
+    console.error('Error guardando empleado:', error)
+  }
 }
 
-const toggleStatus = (employee) => {
-  store.updateEmployee(employee.id, { 
-    status: employee.status === 'active' ? 'inactive' : 'active' 
-  })
+const toggleStatus = async (employee) => {
+  try {
+    const response = await fetch(`http://localhost:3000/api/users/${employee.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: employee.firstName,
+        apellido: employee.lastName,
+        correo: employee.email,
+        rol: employee.rol,
+        activo: !employee.active
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('Error al cambiar estado')
+    }
+
+    await loadEmployees()
+  } catch (error) {
+    console.error('Error actualizando estado:', error)
+  }
 }
 </script>
 
@@ -129,12 +191,12 @@ const toggleStatus = (employee) => {
         <p class="stat-value stat-primary">{{ stats.admins }}</p>
       </div>
       <div class="stat-card">
-        <p class="stat-label">Meseros</p>
-        <p class="stat-value">{{ stats.waiters }}</p>
+        <p class="stat-label">Camareros</p>
+        <p class="stat-value">{{ stats.camareros }}</p>
       </div>
       <div class="stat-card">
         <p class="stat-label">Cocina</p>
-        <p class="stat-value stat-warning">{{ stats.kitchen }}</p>
+        <p class="stat-value stat-warning">{{ stats.cocina }}</p>
       </div>
     </div>
     
@@ -169,7 +231,7 @@ const toggleStatus = (employee) => {
     <!-- Employees Grid -->
     <div class="employees-grid">
       <div
-        v-for="employee in employees"
+        v-for="employee in filteredEmployees"
         :key="employee.id"
         :class="['employee-card', { 'employee-card-inactive': employee.active === false }]"
       >
@@ -234,7 +296,7 @@ const toggleStatus = (employee) => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="employee in employees" :key="employee.id">
+            <tr v-for="employee in filteredEmployees" :key="employee.id">
               <td>
                 <div class="cell-employee">
                   <div :class="['mini-avatar', `mini-avatar-${employee.rol}`]">
@@ -315,6 +377,15 @@ const toggleStatus = (employee) => {
                 </select>
               </div>
             </div>
+
+            <div v-if="!editingEmployee" class="form-row">
+              <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <input v-model="formData.password" type="password" class="input" placeholder="Escribe una contraseña" required />
+              </div>
+            </div>
+
+            
             
             <div class="form-checkbox">
               <input 
@@ -538,12 +609,12 @@ const toggleStatus = (employee) => {
   color: var(--primary);
 }
 
-.employee-avatar-waiter {
+.employee-avatar-camarero {
   background: rgba(34, 197, 94, 0.2);
   color: var(--success);
 }
 
-.employee-avatar-kitchen {
+.employee-avatar-cocina {
   background: rgba(245, 158, 11, 0.2);
   color: var(--warning);
 }
@@ -721,12 +792,12 @@ const toggleStatus = (employee) => {
   color: var(--primary);
 }
 
-.mini-avatar-waiter {
+.mini-avatar-camarero {
   background: rgba(34, 197, 94, 0.2);
   color: var(--success);
 }
 
-.mini-avatar-kitchen {
+.mini-avatar-cocina {
   background: rgba(245, 158, 11, 0.2);
   color: var(--warning);
 }
