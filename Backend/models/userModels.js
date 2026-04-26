@@ -18,7 +18,7 @@ const findUserByEmail = async (email) => {
 
 const showUsers = async () => {
   const [rows] = await db.query(
-    "SELECT * FROM usuario"
+    "SELECT id,nombre,apellido,correo,rol,activo FROM usuario"
   )
   return rows
 }

@@ -1,8 +1,15 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
+import { useUsersStore } from '@/stores/users'
 
 const store = useRestaurantStore()
+//cargar empleados
+const usersStore = useUsersStore()
+onMounted(async () => {
+  await usersStore.fetchUsers()
+})
+const employees = computed(() => usersStore.users)
 
 const searchQuery = ref('')
 const selectedRole = ref('all')
@@ -162,38 +169,33 @@ const toggleStatus = (employee) => {
     <!-- Employees Grid -->
     <div class="employees-grid">
       <div
-        v-for="employee in filteredEmployees"
+        v-for="employee in employees"
         :key="employee.id"
-        :class="['employee-card', { 'employee-card-inactive': employee.status === 'inactive' }]"
+        :class="['employee-card', { 'employee-card-inactive': employee.active === false }]"
       >
         <div class="employee-header">
           <!-- Avatar -->
-          <div :class="['employee-avatar', `employee-avatar-${employee.role}`]">
-            {{ employee.avatar }}
+          <div :class="['employee-avatar', `employee-avatar-${employee.rol}`]">
+            {{ employee.firstName[0]+employee.lastName[0]}}
           </div>
           
           <!-- Info -->
           <div class="employee-info">
             <div class="employee-name-row">
-              <h3 class="employee-name">{{ employee.name }}</h3>
+              <h3 class="employee-name">{{ employee.firstName +" "+employee.lastName }}</h3>
               <span v-if="employee.status === 'inactive'" class="badge badge-danger">Inactivo</span>
             </div>
             <p class="employee-email">{{ employee.email }}</p>
             <div class="employee-meta">
-              <span :class="['badge', getRoleInfo(employee.role).color]">
-                {{ getRoleInfo(employee.role).label }}
+              <span :class="['badge', getRoleInfo(employee.rol).color]">
+                {{ getRoleInfo(employee.rol).label }}
               </span>
-              <span class="employee-shift">{{ employee.shift }}</span>
             </div>
           </div>
         </div>
         
         <!-- Contact -->
         <div class="employee-footer">
-          <div class="employee-phone">
-            <span class="material-symbols-outlined">call</span>
-            {{ employee.phone }}
-          </div>
           
           <div class="employee-actions">
             <button @click="openEditModal(employee)" class="action-icon" title="Editar">
@@ -201,10 +203,10 @@ const toggleStatus = (employee) => {
             </button>
             <button 
               @click="toggleStatus(employee)" 
-              :class="['action-icon', employee.status === 'active' ? 'action-icon-danger' : 'action-icon-success']"
-              :title="employee.status === 'active' ? 'Desactivar' : 'Activar'"
+              :class="['action-icon', employee.active === true ? 'action-icon-danger' : 'action-icon-success']"
+              :title="employee.active === true ? 'Desactivar' : 'Activar'"
             >
-              <span class="material-symbols-outlined">{{ employee.status === 'active' ? 'block' : 'check_circle' }}</span>
+              <span class="material-symbols-outlined">{{ employee.active === true ? 'block' : 'check_circle' }}</span>
             </button>
           </div>
         </div>
@@ -226,34 +228,32 @@ const toggleStatus = (employee) => {
             <tr>
               <th>Empleado</th>
               <th>Email</th>
-              <th>Telefono</th>
               <th>Rol</th>
-              <th>Turno</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="employee in filteredEmployees" :key="employee.id">
+            <tr v-for="employee in employees" :key="employee.id">
               <td>
                 <div class="cell-employee">
-                  <div :class="['mini-avatar', `mini-avatar-${employee.role}`]">
-                    {{ employee.avatar }}
+                  <div :class="['mini-avatar', `mini-avatar-${employee.rol}`]">
+                    {{ employee.firstName[0]+employee.lastName[0] }}
                   </div>
-                  <span class="cell-name">{{ employee.name }}</span>
+                  <span class="cell-name">{{ employee.firstName + ' ' + employee.lastName }}</span>
                 </div>
               </td>
               <td class="cell-muted">{{ employee.email }}</td>
-              <td class="cell-muted">{{ employee.phone }}</td>
+              
               <td>
-                <span :class="['badge', getRoleInfo(employee.role).color]">
-                  {{ getRoleInfo(employee.role).label }}
+                <span :class="['badge', getRoleInfo(employee.rol).color]">
+                  {{ getRoleInfo(employee.rol).label }}
                 </span>
               </td>
-              <td class="cell-muted">{{ employee.shift }}</td>
+              
               <td>
-                <span :class="['badge', employee.status === 'active' ? 'badge-success' : 'badge-danger']">
-                  {{ employee.status === 'active' ? 'Activo' : 'Inactivo' }}
+                <span :class="['badge', employee.active === true ? 'badge-success' : 'badge-danger']">
+                  {{ employee.active === true ? 'Activo' : 'Inactivo' }}
                 </span>
               </td>
               <td>
@@ -290,9 +290,15 @@ const toggleStatus = (employee) => {
           </div>
           
           <form @submit.prevent="saveEmployee" class="modal-form">
-            <div class="form-group">
-              <label class="form-label">Nombre Completo</label>
-              <input v-model="formData.name" type="text" class="input" placeholder="Juan Perez" required />
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Nombre</label>
+                <input v-model="formData.firstName" type="text" class="input" placeholder="Juan Perez" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Apellido</label>
+                <input v-model="formData.lastName" type="text" class="input" placeholder="Gomez" required />
+              </div>
             </div>
             
             <div class="form-row">
@@ -301,24 +307,11 @@ const toggleStatus = (employee) => {
                 <input v-model="formData.email" type="email" class="input" placeholder="email@restaurant.com" required />
               </div>
               <div class="form-group">
-                <label class="form-label">Telefono</label>
-                <input v-model="formData.phone" type="tel" class="input" placeholder="555-1234" required />
-              </div>
-            </div>
-            
-            <div class="form-row">
-              <div class="form-group">
                 <label class="form-label">Rol</label>
-                <select v-model="formData.role" class="input">
+                <select v-model="formData.rol" class="input">
                   <option v-for="role in roles.slice(1)" :key="role.value" :value="role.value">
                     {{ role.label }}
                   </option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Turno</label>
-                <select v-model="formData.shift" class="input">
-                  <option v-for="shift in shifts" :key="shift" :value="shift">{{ shift }}</option>
                 </select>
               </div>
             </div>

@@ -1,8 +1,9 @@
 <script setup>
 import { ref } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const sidebarOpen = ref(true)
@@ -10,6 +11,7 @@ const mobileMenuOpen = ref(false)
 
 const navigation = [
   { name: 'Dashboard', path: '/', icon: 'dashboard' },
+  { name: 'Clientes', path: '/customers', icon: 'people' },
   { name: 'Menu', path: '/menu', icon: 'restaurant_menu' },
   { name: 'Pedidos', path: '/orders', icon: 'receipt_long' },
   { name: 'Mesas', path: '/tables', icon: 'table_restaurant' },
@@ -23,6 +25,9 @@ const isActive = (path) => {
 
 const handleLogout = () => {
   authStore.logout()
+  router.push('/login').then(() => {
+    window.location.reload()
+  })
 }
 </script>
 
@@ -159,6 +164,7 @@ const handleLogout = () => {
   z-index: 50;
   transition: all var(--transition-slow);
   transform: translateX(-100%);
+  height: 100vh;
 }
 
 @media (min-width: 1024px) {

@@ -7,6 +7,7 @@ import OrdersView from "@/views/OrdersView.vue"
 import TablesView from "@/views/TablesView.vue"
 import EmployeesView from "@/views/EmployeesView.vue"
 import AdminLayout from "@/layouts/AdminLayout.vue"
+import CustomersView from "@/views/CustomersView.vue"
 
 const router = createRouter({
 
@@ -26,6 +27,10 @@ const router = createRouter({
         {
           path: "",
           component: DashboardView
+        },
+        {
+          path: "customers",
+          component: CustomersView
         },
         {
           path: "menu",

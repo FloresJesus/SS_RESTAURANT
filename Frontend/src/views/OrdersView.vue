@@ -51,6 +51,9 @@ const ordersByStatus = computed(() => ({
   ready: store.orders.filter(o => o.status === 'ready'),
   delivered: store.orders.filter(o => o.status === 'delivered')
 }))
+
+
+
 </script>
 
 <template>
@@ -61,7 +64,7 @@ const ordersByStatus = computed(() => ({
         <h1 class="page-title">Gestion de Pedidos</h1>
         <p class="page-subtitle">Monitorea y actualiza los pedidos en tiempo real</p>
       </div>
-      <button class="btn btn-primary">
+      <button @click="openAddModal" class="btn btn-primary">
         <span class="material-symbols-outlined">add</span>
         Nuevo Pedido
       </button>

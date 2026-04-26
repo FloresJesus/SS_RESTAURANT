@@ -97,7 +97,7 @@ const lineChartOptions = {
       grid: { color: '#e1e3e2' },
       ticks: { 
         color: '#707975',
-        callback: (value) => '$' + (value / 1000) + 'k'
+        callback: (value) => 'Bs ' + value + 'k'
       }
     }
   }
