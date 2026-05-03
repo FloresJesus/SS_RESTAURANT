@@ -83,11 +83,28 @@ const deleteReservation = async (id) => {
   return result
 }
 
+const getAvailableTables = async (fecha, hora) => {
+  const [rows] = await db.query(
+    `SELECT m.id, m.nombre, m.capacidad, m.ubicacion
+     FROM mesa m
+     WHERE m.activa = 1
+     AND m.id NOT IN (
+       SELECT r.mesa_id FROM reservacion r
+       WHERE r.fecha = ?
+       AND r.estado IN ('pendiente', 'confirmada')
+     )
+     ORDER BY m.capacidad ASC`,
+    [fecha]
+  )
+  return rows
+}
+
 module.exports = {
   showReservations,
   findReservationById,
   createCustomer,
   createReservation,
   updateReservation,
-  deleteReservation
+  deleteReservation,
+  getAvailableTables
 }

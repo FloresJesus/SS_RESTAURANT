@@ -8,6 +8,13 @@ import TablesView from "@/views/TablesView.vue"
 import EmployeesView from "@/views/EmployeesView.vue"
 import AdminLayout from "@/layouts/AdminLayout.vue"
 import CustomersView from "@/views/CustomersView.vue"
+import ReservationView from "@/views/ReservationView.vue"
+
+const ROLE_ACCESS: Record<string, string[]> = {
+  admin: ["dashboard", "customers", "menu", "orders", "tables", "employees"],
+  camarero: ["dashboard", "customers", "menu", "orders", "tables"],
+  cocina: ["dashboard", "orders"]
+}
 
 const router = createRouter({
 
@@ -21,32 +28,43 @@ const router = createRouter({
     },
 
     {
+      path: "/reservar",
+      component: ReservationView
+    },
+
+    {
       path: "/",
       component: AdminLayout,
       children: [
         {
           path: "",
-          component: DashboardView
+          component: DashboardView,
+          meta: { roles: ["admin", "camarero", "cocina"] }
         },
         {
           path: "customers",
-          component: CustomersView
+          component: CustomersView,
+          meta: { roles: ["admin", "camarero"] }
         },
         {
           path: "menu",
-          component: MenuView
+          component: MenuView,
+          meta: { roles: ["admin", "camarero", "cocina"] }
         },
         {
           path: "orders",
-          component: OrdersView
+          component: OrdersView,
+          meta: { roles: ["admin", "camarero", "cocina"] }
         },
         {
           path: "tables",
-          component: TablesView
+          component: TablesView,
+          meta: { roles: ["admin", "camarero"] }
         },
         {
           path: "employees",
-          component: EmployeesView
+          component: EmployeesView,
+          meta: { roles: ["admin"] }
         }
       ]
     }
@@ -56,8 +74,9 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-
   const token = localStorage.getItem("token")
+  const rawUser = localStorage.getItem("user")
+  const user = rawUser ? JSON.parse(rawUser) : null
 
   if (to.path === "/login") {
     if (token) {
@@ -65,13 +84,28 @@ router.beforeEach((to, from, next) => {
     } else {
       next()
     }
-  } else {
-    if (token) {
-      next()
-    } else {
-      next("/login")
+    return
+  }
+
+  if (to.path === "/reservar") {
+    next()
+    return
+  }
+
+  if (!token) {
+    next("/login")
+    return
+  }
+
+  if (to.meta.roles && user?.rol) {
+    const allowed = to.meta.roles as string[]
+    if (!allowed.includes(user.rol)) {
+      next("/")
+      return
     }
   }
+
+  next()
 
 })
 

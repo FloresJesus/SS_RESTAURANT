@@ -1,8 +1,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
+import { useAuthStore } from '@/stores/auth'
 
 const store = useRestaurantStore()
+const authStore = useAuthStore()
+
+const userRole = computed(() => authStore.user?.rol || '')
+const isAdmin = computed(() => userRole.value === 'admin')
 
 const searchQuery = ref('')
 const selectedCategory = ref('all')
@@ -167,7 +172,7 @@ onMounted(async () => {
         <h1 class="page-title">Gestion de Menu</h1>
         <p class="page-subtitle">Administra los platillos de tu restaurante</p>
       </div>
-      <button @click="openAddModal" class="btn btn-primary">
+      <button v-if="isAdmin" @click="openAddModal" class="btn btn-primary">
         <span class="material-symbols-outlined">add</span>
         Agregar Platillo
       </button>
@@ -231,7 +236,7 @@ onMounted(async () => {
         </div>
         
         <!-- Actions overlay -->
-        <div class="menu-card-overlay">
+        <div v-if="isAdmin" class="menu-card-overlay">
           <button @click="openEditModal(item)" class="btn btn-secondary btn-sm">
             <span class="material-symbols-outlined">edit</span>
             Editar

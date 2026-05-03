@@ -9,14 +9,20 @@ const authStore = useAuthStore()
 const sidebarOpen = ref(true)
 const mobileMenuOpen = ref(false)
 
-const navigation = [
-  { name: 'Dashboard', path: '/', icon: 'dashboard' },
-  { name: 'Clientes', path: '/customers', icon: 'people' },
-  { name: 'Menu', path: '/menu', icon: 'restaurant_menu' },
-  { name: 'Pedidos', path: '/orders', icon: 'receipt_long' },
-  { name: 'Mesas', path: '/tables', icon: 'table_restaurant' },
-  { name: 'Empleados', path: '/employees', icon: 'groups' }
+const allNavigation = [
+  { name: 'Dashboard', path: '/', icon: 'dashboard', roles: ['admin', 'camarero', 'cocina'] },
+  { name: 'Clientes', path: '/customers', icon: 'people', roles: ['admin', 'camarero'] },
+  { name: 'Menu', path: '/menu', icon: 'restaurant_menu', roles: ['admin', 'camarero', 'cocina'] },
+  { name: 'Pedidos', path: '/orders', icon: 'receipt_long', roles: ['admin', 'camarero', 'cocina'] },
+  { name: 'Mesas', path: '/tables', icon: 'table_restaurant', roles: ['admin', 'camarero'] },
+  { name: 'Empleados', path: '/employees', icon: 'groups', roles: ['admin'] }
 ]
+
+const navigation = computed(() => {
+  const userRole = authStore.user?.rol
+  if (!userRole) return []
+  return allNavigation.filter(item => item.roles.includes(userRole))
+})
 
 const isActive = (path) => {
   if (path === '/') return route.path === '/'
@@ -33,8 +39,10 @@ const displayName = computed(() => {
   return `${authStore.user.nombre} ${authStore.user.apellido}`
 })
 
+const roleLabels = { admin: 'Administrador', camarero: 'Camarero', cocina: 'Cocina' }
+
 const displayRole = computed(() => {
-  return authStore.user?.rol || 'Sin rol'
+  return roleLabels[authStore.user?.rol] || 'Sin rol'
 })
 
 const handleLogout = () => {

@@ -10,6 +10,7 @@ const {
   deleteMenuItemById,
   uploadImage
 } = require("../controllers/menuController")
+const { checkRole } = require("../middleware/roleMiddleware")
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -36,9 +37,9 @@ const upload = multer({
 })
 
 router.get("/", getMenu)
-router.post("/", createNewMenuItem)
-router.put("/:id", updateExistingMenuItem)
-router.delete("/:id", deleteMenuItemById)
-router.post("/upload", upload.single("image"), uploadImage)
+router.post("/", checkRole(["admin"]), createNewMenuItem)
+router.put("/:id", checkRole(["admin"]), updateExistingMenuItem)
+router.delete("/:id", checkRole(["admin"]), deleteMenuItemById)
+router.post("/upload", checkRole(["admin"]), upload.single("image"), uploadImage)
 
 module.exports = router

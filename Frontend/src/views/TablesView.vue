@@ -1,8 +1,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
+import { useAuthStore } from '@/stores/auth'
 
 const store = useRestaurantStore()
+const authStore = useAuthStore()
+
+const userRole = computed(() => authStore.user?.rol || '')
+const isAdmin = computed(() => userRole.value === 'admin')
 
 const activeTab = ref('tables')
 const showReservationModal = ref(false)
@@ -152,7 +157,7 @@ const todayReservations = computed(() => {
         <p class="page-subtitle">Gestiona el estado de las mesas y reservaciones</p>
       </div>
       <div class="header-actions">
-        <button @click="openTableModal" class="btn btn-secondary">
+        <button v-if="isAdmin" @click="openTableModal" class="btn btn-secondary">
           <span class="material-symbols-outlined">add</span>
           Nueva Mesa
         </button>

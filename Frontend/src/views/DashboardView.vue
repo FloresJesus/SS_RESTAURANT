@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
+import { useAuthStore } from '@/stores/auth'
 import { Line, Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -28,6 +29,9 @@ ChartJS.register(
 )
 
 const store = useRestaurantStore()
+const authStore = useAuthStore()
+
+const userRole = computed(() => authStore.user?.rol || '')
 
 const stats = computed(() => {
   const totalSales = store.salesData.weekly.reduce((sum, day) => sum + day.sales, 0)

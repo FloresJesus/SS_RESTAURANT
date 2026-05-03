@@ -5,9 +5,10 @@ const {
   createNewOrder,
   updateExistingOrderStatus
 } = require("../controllers/orderController")
+const { checkRole } = require("../middleware/roleMiddleware")
 
 router.get("/", getAllOrders)
-router.post("/", createNewOrder)
+router.post("/", checkRole(["admin", "camarero"]), createNewOrder)
 router.put("/:id/status", updateExistingOrderStatus)
 
 module.exports = router

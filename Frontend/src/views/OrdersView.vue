@@ -1,8 +1,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
+import { useAuthStore } from '@/stores/auth'
 
 const store = useRestaurantStore()
+const authStore = useAuthStore()
+
+const userRole = computed(() => authStore.user?.rol || '')
 
 const selectedStatus = ref('all')
 const showOrderModal = ref(false)
@@ -60,8 +64,17 @@ const formatCurrency = (value) => {
   return `Bs ${Number(value).toFixed(2)}`
 }
 
-const updateStatus = async (orderId, newStatus) => {
-  await store.updateOrderStatus(orderId, newStatus)
+const canCreateOrder = computed(() => ['admin', 'camarero'].includes(userRole.value))
+
+const canUpdateTo = (orderStatus) => {
+  if (userRole.value === 'admin') return true
+  if (userRole.value === 'cocina') {
+    return orderStatus === 'pending' || orderStatus === 'preparing'
+  }
+  if (userRole.value === 'camarero') {
+    return orderStatus === 'ready'
+  }
+  return false
 }
 
 const getNextStatus = (currentStatus) => {
@@ -84,34 +97,15 @@ const ordersByStatus = computed(() => ({
   delivered: store.orders.filter(o => o.status === 'delivered')
 }))
 
-const menuOptions = computed(() => store.menuItems)
-
-const addItemRow = () => {
-  orderForm.value.items.push({ plato_id: null, qty: 1, price: 0, notes: '' })
-}
-
-const removeItemRow = (index) => {
-  orderForm.value.items.splice(index, 1)
-}
-
-const updateItemPrice = (index) => {
-  const selected = orderForm.value.items[index]
-  const dish = menuOptions.value.find((menuItem) => menuItem.id === Number(selected.plato_id))
-  if (dish) {
-    selected.price = dish.price
-  }
-}
-
 const openAddModal = () => {
+  if (!canCreateOrder.value) return
   orderForm.value = {
     table: null,
     customer: null,
-    waiter: '',
+    waiter: authStore.user ? `${authStore.user.nombre} ${authStore.user.apellido}` : '',
     propina: 0,
     metodo_pago: 'efectivo',
-    items: [
-      { plato_id: null, qty: 1, price: 0, notes: '' }
-    ]
+    items: [{ plato_id: null, qty: 1, price: 0, notes: '' }]
   }
   showNewCustomerForm.value = false
   showOrderModal.value = true
@@ -121,6 +115,63 @@ const closeOrderModal = () => {
   showOrderModal.value = false
   showNewCustomerForm.value = false
 }
+
+const addItem = () => {
+  orderForm.value.items.push({ plato_id: null, qty: 1, price: 0, notes: '' })
+}
+
+const removeItem = (idx) => {
+  if (orderForm.value.items.length > 1) {
+    orderForm.value.items.splice(idx, 1)
+  }
+}
+
+const onItemMenuChange = (idx) => {
+  const selected = store.menuItems.find(m => m.id === orderForm.value.items[idx].plato_id)
+  if (selected) {
+    orderForm.value.items[idx].price = selected.price
+  }
+}
+
+const createOrder = async () => {
+  const validItems = orderForm.value.items.filter(i => i.plato_id)
+  if (!validItems.length) return
+
+  await store.createOrder({
+    mesa_id: orderForm.value.table,
+    usuario_id: authStore.user?.id,
+    items: validItems,
+    propina: Number(orderForm.value.propina),
+    metodo_pago: orderForm.value.metodo_pago,
+    customer: orderForm.value.customer
+  })
+
+  if (showNewCustomerForm.value && newCustomerForm.value.name) {
+    await store.createCustomer({
+      nombre: newCustomerForm.value.name,
+      telefono: newCustomerForm.value.phone,
+      correo: newCustomerForm.value.email || null
+    })
+  }
+
+  closeOrderModal()
+}
+
+const updateStatus = async (orderId, newStatus) => {
+  if (!canUpdateTo(store.orders.find(o => o.id === orderId)?.status)) return
+  await store.updateOrderStatus(orderId, newStatus)
+}
+
+const canSeeWaiterInfo = computed(() => userRole.value !== 'cocina')
+
+const canSeeCustomerSection = computed(() => userRole.value === 'cocina')
+
+onMounted(async () => {
+  await store.loadOrders()
+  await store.loadMenuItems()
+  await store.loadTables()
+  await store.loadCustomers()
+})
 
 const createNewCustomer = async () => {
   if (!newCustomerForm.value.name || !newCustomerForm.value.phone) {
@@ -215,7 +266,7 @@ onMounted(async () => {
         <h1 class="page-title">Gestion de Pedidos</h1>
         <p class="page-subtitle">Monitorea y actualiza los pedidos en tiempo real</p>
       </div>
-      <button @click="openAddModal" class="btn btn-primary">
+      <button v-if="canCreateOrder" @click="openAddModal" class="btn btn-primary">
         <span class="material-symbols-outlined">add</span>
         Nuevo Pedido
       </button>
@@ -290,20 +341,20 @@ onMounted(async () => {
                 <p class="total-value">{{ formatCurrency(order.total) }}</p>
               </div>
               <button 
-                v-if="getNextStatus(order.status)"
+                v-if="getNextStatus(order.status) && canUpdateTo(order.status)"
                 @click="updateStatus(order.id, getNextStatus(order.status))"
                 class="btn btn-primary btn-sm"
               >
                 {{ getNextStatusLabel(order.status) }}
               </button>
-              <span v-else class="completed-badge">
+              <span v-else-if="!getNextStatus(order.status)" class="completed-badge">
                 <span class="material-symbols-outlined">check_circle</span>
                 Completado
               </span>
             </div>
             
             <!-- Waiter Info -->
-            <div class="order-waiter">
+            <div v-if="canSeeWaiterInfo" class="order-waiter">
               <span class="material-symbols-outlined">person</span>
               {{ order.waiter }}
             </div>
@@ -377,7 +428,7 @@ onMounted(async () => {
               </td>
               <td>
                 <button 
-                  v-if="getNextStatus(order.status)"
+                  v-if="getNextStatus(order.status) && canUpdateTo(order.status)"
                   @click="updateStatus(order.id, getNextStatus(order.status))"
                   class="btn btn-primary btn-sm"
                 >

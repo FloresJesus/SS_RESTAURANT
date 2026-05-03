@@ -4,9 +4,21 @@ import { ref } from 'vue'
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api'
 
 const fetchJson = async (url: string, options: RequestInit = {}) => {
-  const response = await fetch(url, options)
+  const token = localStorage.getItem('token')
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> || {})
+  }
+  if (token && !url.includes('/auth/')) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  const response = await fetch(url, { ...options, headers })
   if (!response.ok) {
     const error = await response.text()
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    }
     throw new Error(error || response.statusText)
   }
   return response.json()
