@@ -59,18 +59,18 @@ router.beforeEach((to, from, next) => {
 
   const token = localStorage.getItem("token")
 
-  if (to.path !== "/login" && !token) {
-
-    next("/login")
-
-  } else if (to.path === "/login" && token) {
-
-    next("/")
-
+  if (to.path === "/login") {
+    if (token) {
+      next("/")
+    } else {
+      next()
+    }
   } else {
-
-    next()
-
+    if (token) {
+      next()
+    } else {
+      next("/login")
+    }
   }
 
 })

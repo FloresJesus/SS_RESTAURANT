@@ -15,6 +15,19 @@ const formData = ref({
   notas: ''
 })
 
+const nombreError = ref('')
+
+// Validar que el nombre no contenga números
+const validateNombre = (nombre) => {
+  const numeroRegex = /[0-9]/
+  if (numeroRegex.test(nombre)) {
+    nombreError.value = 'El nombre no puede contener números'
+    return false
+  }
+  nombreError.value = ''
+  return true
+}
+
 const customers = computed(() => {
   return customersStore.customers.map(customer => ({
     ...customer,
@@ -73,6 +86,11 @@ const closeModal = () => {
 }
 
 const saveCustomer = async () => {
+  // Validar nombre antes de guardar
+  if (!validateNombre(formData.value.nombre)) {
+    return
+  }
+
   const payload = {
     nombre: formData.value.nombre,
     telefono: formData.value.telefono,
@@ -294,7 +312,16 @@ const deleteCustomer = async (customer) => {
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Nombre</label>
-                <input v-model="formData.nombre" type="text" class="input" placeholder="Juan Pérez" required />
+                <input 
+                  v-model="formData.nombre" 
+                  @input="validateNombre(formData.nombre)"
+                  type="text" 
+                  class="input" 
+                  :class="{ 'input-error': nombreError }"
+                  placeholder="Juan Pérez" 
+                  required 
+                />
+                <span v-if="nombreError" class="error-text">{{ nombreError }}</span>
               </div>
               <div class="form-group">
                 <label class="form-label">Teléfono</label>

@@ -23,10 +23,34 @@ export const useAuthStore = defineStore("auth", {
 
   state: () => ({
     user: null as User | null,
-    token: localStorage.getItem("token") as string | null
+    token: null as string | null
   }),
 
+  getters: {
+    isAuthenticated: (state) => state.token !== null && state.token !== ""
+  },
+
   actions: {
+
+    init() {
+      try {
+        const rawToken = localStorage.getItem("token")
+        const rawUser = localStorage.getItem("user")
+
+        if (rawToken && rawToken.length > 0) {
+          this.token = rawToken
+        }
+
+        if (rawUser && rawUser.length > 0) {
+          this.user = JSON.parse(rawUser)
+        }
+      } catch {
+        this.token = null
+        this.user = null
+        localStorage.removeItem("token")
+        localStorage.removeItem("user")
+      }
+    },
 
     async login(email: string, password: string): Promise<LoginResult> {
 
@@ -62,6 +86,7 @@ export const useAuthStore = defineStore("auth", {
         this.user = data.user
 
         localStorage.setItem("token", data.token)
+        localStorage.setItem("user", JSON.stringify(data.user))
 
         return { success: true }
 
@@ -82,6 +107,7 @@ export const useAuthStore = defineStore("auth", {
       this.token = null
 
       localStorage.removeItem("token")
+      localStorage.removeItem("user")
 
     }
 

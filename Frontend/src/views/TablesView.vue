@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 
 const store = useRestaurantStore()
@@ -10,6 +10,8 @@ const showReservationModal = ref(false)
 const reservationForm = ref({
   name: '',
   phone: '',
+  email: '',
+  tableId: null,
   guests: 2,
   date: '',
   time: '',
@@ -34,9 +36,9 @@ const getStatusInfo = (status) => {
 
 const getReservationStatusInfo = (status) => {
   const info = {
-    confirmed: { label: 'Confirmada', badgeClass: 'badge-success' },
-    pending: { label: 'Pendiente', badgeClass: 'badge-warning' },
-    cancelled: { label: 'Cancelada', badgeClass: 'badge-danger' }
+    confirmada: { label: 'Confirmada', badgeClass: 'badge-success' },
+    pendiente: { label: 'Pendiente', badgeClass: 'badge-warning' },
+    cancelada: { label: 'Cancelada', badgeClass: 'badge-danger' }
   }
   return info[status] || { label: status, badgeClass: '' }
 }
@@ -45,10 +47,43 @@ const updateTableStatus = (tableId, newStatus) => {
   store.updateTableStatus(tableId, newStatus)
 }
 
+const showTableModal = ref(false)
+const tableForm = ref({
+  nombre: '',
+  capacidad: 2,
+  ubicacion: '',
+  activa: true
+})
+
+const openTableModal = () => {
+  tableForm.value = {
+    nombre: '',
+    capacidad: 2,
+    ubicacion: '',
+    activa: true
+  }
+  showTableModal.value = true
+}
+
+const saveTable = async () => {
+  if (!tableForm.value.nombre || tableForm.value.capacidad <= 0) {
+    return
+  }
+  await store.createTable({
+    nombre: tableForm.value.nombre,
+    capacidad: Number(tableForm.value.capacidad),
+    ubicacion: tableForm.value.ubicacion || null,
+    activa: tableForm.value.activa
+  })
+  showTableModal.value = false
+}
+
 const openReservationModal = () => {
   reservationForm.value = {
     name: '',
     phone: '',
+    email: '',
+    tableId: null,
     guests: 2,
     date: new Date().toISOString().split('T')[0],
     time: '19:00',
@@ -57,22 +92,54 @@ const openReservationModal = () => {
   showReservationModal.value = true
 }
 
-const saveReservation = () => {
-  store.addReservation({ ...reservationForm.value })
+const saveReservation = async () => {
+  await store.createReservation({
+    nombre: reservationForm.value.name,
+    telefono: reservationForm.value.phone,
+    correo: reservationForm.value.email || null,
+    mesa_id: reservationForm.value.tableId,
+    fecha: reservationForm.value.date,
+    hora: reservationForm.value.time,
+    personas: reservationForm.value.guests,
+    notas: reservationForm.value.notes
+  })
   showReservationModal.value = false
 }
 
-const confirmReservation = (id) => {
-  store.updateReservation(id, { status: 'confirmed' })
+const confirmReservation = async (id) => {
+  const reservation = store.reservations.find((r) => r.id === id)
+  if (!reservation) return
+  await store.updateReservation(id, {
+    mesa_id: reservation.mesa_id,
+    fecha: reservation.date,
+    hora: reservation.time,
+    personas: reservation.guests,
+    estado: 'confirmada',
+    notas: reservation.notes
+  })
 }
 
-const cancelReservation = (id) => {
-  store.updateReservation(id, { status: 'cancelled' })
+const cancelReservation = async (id) => {
+  const reservation = store.reservations.find((r) => r.id === id)
+  if (!reservation) return
+  await store.updateReservation(id, {
+    mesa_id: reservation.mesa_id,
+    fecha: reservation.date,
+    hora: reservation.time,
+    personas: reservation.guests,
+    estado: 'cancelada',
+    notas: reservation.notes
+  })
 }
+
+onMounted(async () => {
+  await store.loadReservations()
+  await store.loadTables()
+})
 
 const todayReservations = computed(() => {
   const today = new Date().toISOString().split('T')[0]
-  return store.reservations.filter(r => r.date === today || r.status === 'pending')
+  return store.reservations.filter(r => r.date === today || r.status === 'pendiente')
 })
 </script>
 
@@ -84,10 +151,16 @@ const todayReservations = computed(() => {
         <h1 class="page-title">Mesas y Reservaciones</h1>
         <p class="page-subtitle">Gestiona el estado de las mesas y reservaciones</p>
       </div>
-      <button @click="openReservationModal" class="btn btn-primary">
-        <span class="material-symbols-outlined">add</span>
-        Nueva Reservacion
-      </button>
+      <div class="header-actions">
+        <button @click="openTableModal" class="btn btn-secondary">
+          <span class="material-symbols-outlined">add</span>
+          Nueva Mesa
+        </button>
+        <button @click="openReservationModal" class="btn btn-primary">
+          <span class="material-symbols-outlined">add</span>
+          Nueva Reservacion
+        </button>
+      </div>
     </div>
     
     <!-- Tabs -->
@@ -286,7 +359,50 @@ const todayReservations = computed(() => {
         </div>
       </div>
     </div>
-    
+
+    <!-- Table Modal -->
+    <Teleport to="body">
+      <div v-if="showTableModal" class="modal-overlay">
+        <div @click="showTableModal = false" class="modal-backdrop"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title">Nueva Mesa</h2>
+            <button @click="showTableModal = false" class="modal-close">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <form @submit.prevent="saveTable" class="modal-form">
+            <div class="form-group">
+              <label class="form-label">Nombre de la Mesa</label>
+              <input v-model="tableForm.nombre" type="text" class="input" placeholder="A1, B2, Terraza" required />
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">Capacidad</label>
+                <input v-model="tableForm.capacidad" type="number" min="1" class="input" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Ubicación</label>
+                <input v-model="tableForm.ubicacion" type="text" class="input" placeholder="Interior, Terraza" />
+              </div>
+            </div>
+
+            <div class="form-checkbox">
+              <input v-model="tableForm.activa" type="checkbox" id="table-active" />
+              <label for="table-active">Mesa activa</label>
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" @click="showTableModal = false" class="btn btn-secondary">Cancelar</button>
+              <button type="submit" class="btn btn-primary">Crear Mesa</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Reservation Modal -->
     <Teleport to="body">
       <div v-if="showReservationModal" class="modal-overlay">
@@ -300,16 +416,33 @@ const todayReservations = computed(() => {
           </div>
           
           <form @submit.prevent="saveReservation" class="modal-form">
-            <div class="form-group">
-              <label class="form-label">Nombre del Cliente</label>
-              <input v-model="reservationForm.name" type="text" class="input" placeholder="Nombre completo" required />
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">Nombre del Cliente</label>
+                <input v-model="reservationForm.name" type="text" class="input" placeholder="Nombre completo" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Correo</label>
+                <input v-model="reservationForm.email" type="email" class="input" placeholder="correo@ejemplo.com" />
+              </div>
             </div>
-            
-            <div class="form-group">
-              <label class="form-label">Telefono</label>
-              <input v-model="reservationForm.phone" type="tel" class="input" placeholder="555-1234" required />
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">Telefono</label>
+                <input v-model="reservationForm.phone" type="tel" class="input" placeholder="555-1234" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Mesa</label>
+                <select v-model="reservationForm.tableId" class="input" required>
+                  <option value="" disabled>Selecciona una mesa</option>
+                  <option v-for="table in store.tables" :key="table.id" :value="table.id">
+                    {{ table.number }} ({{ table.capacity }} personas)
+                  </option>
+                </select>
+              </div>
             </div>
-            
+
             <div class="form-row-3">
               <div class="form-group">
                 <label class="form-label">Personas</label>
@@ -324,7 +457,7 @@ const todayReservations = computed(() => {
                 <input v-model="reservationForm.time" type="time" class="input" required />
               </div>
             </div>
-            
+
             <div class="form-group">
               <label class="form-label">Notas</label>
               <textarea v-model="reservationForm.notes" class="input textarea" placeholder="Ocasion especial, preferencias, etc."></textarea>

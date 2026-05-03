@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { Line, Doughnut } from 'vue-chartjs'
 import {
@@ -138,6 +138,11 @@ const statusLabels = {
   ready: 'Listo',
   delivered: 'Entregado'
 }
+
+onMounted(async () => {
+  await store.loadOrders()
+  await store.loadTables()
+})
 </script>
 
 <template>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -22,6 +22,20 @@ const isActive = (path) => {
   if (path === '/') return route.path === '/'
   return route.path.startsWith(path)
 }
+
+const initials = computed(() => {
+  if (!authStore.user || !authStore.user.nombre || !authStore.user.apellido) return '?'
+  return (authStore.user.nombre[0] + authStore.user.apellido[0]).toUpperCase()
+})
+
+const displayName = computed(() => {
+  if (!authStore.user || !authStore.user.nombre || !authStore.user.apellido) return 'Usuario'
+  return `${authStore.user.nombre} ${authStore.user.apellido}`
+})
+
+const displayRole = computed(() => {
+  return authStore.user?.rol || 'Sin rol'
+})
 
 const handleLogout = () => {
   authStore.logout()
@@ -68,13 +82,13 @@ const handleLogout = () => {
       <div class="sidebar-footer">
         <div class="user-section">
           <div class="user-avatar">
-            {{ authStore.user ? (authStore.user.nombre[0] + authStore.user.apellido[0]).toUpperCase() : '?' }}
+            {{ initials }}
           </div>
           <div v-if="sidebarOpen" class="user-info">
             <p class="user-name">
-              {{ authStore.user ? `${authStore.user.nombre} ${authStore.user.apellido}` : 'Usuario no logueado' }}
+              {{ displayName }}
             </p>
-            <p class="user-role">{{ authStore.user?.rol || 'Sin rol' }}</p>
+            <p class="user-role">{{ displayRole }}</p>
           </div>
           <button 
             v-if="sidebarOpen"

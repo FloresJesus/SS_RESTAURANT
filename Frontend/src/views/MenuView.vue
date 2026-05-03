@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 
 const store = useRestaurantStore()
@@ -8,6 +8,8 @@ const searchQuery = ref('')
 const selectedCategory = ref('all')
 const showModal = ref(false)
 const editingItem = ref(null)
+const imageFile = ref(null)
+const imagePreview = ref('')
 
 const categories = ['all', 'Platos Principales', 'Entradas', 'Postres', 'Bebidas']
 
@@ -16,7 +18,10 @@ const formData = ref({
   category: 'Platos Principales',
   price: '',
   description: '',
-  available: true
+  available: true,
+  nota_alergenos: '',
+  tiempo_cocina_min: 15,
+  imagen: null
 })
 
 const filteredItems = computed(() => {
@@ -33,45 +38,86 @@ const formatCurrency = (value) => {
 
 const openAddModal = () => {
   editingItem.value = null
+  imageFile.value = null
+  imagePreview.value = ''
   formData.value = {
     name: '',
     category: 'Platos Principales',
     price: '',
     description: '',
-    available: true
+    available: true,
+    nota_alergenos: '',
+    tiempo_cocina_min: 15,
+    imagen: null
   }
   showModal.value = true
 }
 
 const openEditModal = (item) => {
   editingItem.value = item
-  formData.value = { ...item }
+  imageFile.value = null
+  imagePreview.value = item.imagen || ''
+  formData.value = {
+    ...item,
+    category: item.category || 'Platos Principales',
+    nota_alergenos: item.nota_alergenos || '',
+    tiempo_cocina_min: item.tiempo_cocina_min || 15
+  }
   showModal.value = true
 }
 
 const closeModal = () => {
   showModal.value = false
   editingItem.value = null
+  imageFile.value = null
+  imagePreview.value = ''
 }
 
-const saveItem = () => {
-  if (editingItem.value) {
-    store.updateMenuItem(editingItem.value.id, { ...formData.value, price: Number(formData.value.price) })
-  } else {
-    store.addMenuItem({ ...formData.value, price: Number(formData.value.price) })
+const onFileChange = (event) => {
+  const file = event.target.files?.[0]
+  if (!file) {
+    imageFile.value = null
+    imagePreview.value = ''
+    return
   }
+  imageFile.value = file
+  imagePreview.value = URL.createObjectURL(file)
+}
+
+const saveItem = async () => {
+  const payload = {
+    ...formData.value,
+    price: Number(formData.value.price),
+    available: Boolean(formData.value.available),
+    imageFile: imageFile.value
+  }
+
+  if (editingItem.value) {
+    await store.updateMenuItem(editingItem.value.id, payload)
+  } else {
+    await store.addMenuItem(payload)
+  }
+
   closeModal()
 }
 
-const deleteItem = (id) => {
-  if (confirm('Estas seguro de eliminar este platillo?')) {
-    store.deleteMenuItem(id)
+const deleteItem = async (id) => {
+  if (confirm('¿Estás seguro de eliminar este platillo?')) {
+    await store.deleteMenuItem(id)
   }
 }
 
-const toggleAvailability = (item) => {
-  store.updateMenuItem(item.id, { available: !item.available })
+const toggleAvailability = async (item) => {
+  await store.updateMenuItem(item.id, {
+    ...item,
+    available: !item.available,
+    price: item.price
+  })
 }
+
+onMounted(async () => {
+  await store.loadMenuItems()
+})
 </script>
 
 <template>
@@ -123,9 +169,9 @@ const toggleAvailability = (item) => {
         :key="item.id"
         :class="['menu-card', { 'menu-card-unavailable': !item.available }]"
       >
-        <!-- Image placeholder -->
         <div class="menu-card-image">
-          <span class="material-symbols-outlined">restaurant</span>
+          <img v-if="item.imagen" :src="item.imagen" alt="Platillo" class="menu-card-image-inner" />
+          <span v-else class="material-symbols-outlined">restaurant</span>
         </div>
         
         <!-- Content -->
@@ -204,6 +250,14 @@ const toggleAvailability = (item) => {
             <div class="form-group">
               <label class="form-label">Descripcion</label>
               <textarea v-model="formData.description" class="input textarea" placeholder="Descripcion del platillo"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Imagen del platillo</label>
+              <input @change="onFileChange" type="file" accept="image/*" class="input" />
+              <div v-if="imagePreview" class="image-preview">
+                <img :src="imagePreview" alt="Vista previa" />
+              </div>
             </div>
             
             <div class="form-checkbox">
