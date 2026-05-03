@@ -57,7 +57,7 @@ const getStatusLabel = (status) => {
 }
 
 const formatCurrency = (value) => {
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value)
+  return `Bs ${Number(value).toFixed(2)}`
 }
 
 const updateStatus = async (orderId, newStatus) => {

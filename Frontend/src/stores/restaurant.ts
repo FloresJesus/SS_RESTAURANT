@@ -101,7 +101,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
       if (item.imageFile) {
         const upload = await uploadMenuImage(item.imageFile)
-        payload.imagen = upload.imageUrl
+        payload.imagen = upload.path
       }
 
       await fetchJson(`${API_BASE}/menu`, {

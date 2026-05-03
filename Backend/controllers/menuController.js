@@ -10,10 +10,22 @@ const getMenu = async (req, res) => {
   try {
     const items = await getMenuItems()
     const baseUrl = `${req.protocol}://${req.get("host")}`
-    const mapped = items.map((item) => ({
-      ...item,
-      imagen: item.imagen ? `${baseUrl}${item.imagen}` : null
-    }))
+    const mapped = items.map((item) => {
+      if (!item.imagen) {
+        return { ...item, imagen: null }
+      }
+      // Extract relative path if it's a full URL (handles corrupted multi-base URLs)
+      const uploadsIndex = item.imagen.indexOf("/uploads/")
+      if (uploadsIndex !== -1) {
+        const relativePath = item.imagen.substring(uploadsIndex)
+        return { ...item, imagen: `${baseUrl}${relativePath}` }
+      }
+      // Already a relative path
+      if (item.imagen.startsWith("/")) {
+        return { ...item, imagen: `${baseUrl}${item.imagen}` }
+      }
+      return { ...item, imagen: item.imagen }
+    })
     res.json(mapped)
   } catch (error) {
     console.error(error)

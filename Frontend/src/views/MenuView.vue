@@ -33,7 +33,39 @@ const filteredItems = computed(() => {
 })
 
 const formatCurrency = (value) => {
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'BOB' }).format(value)
+  return `Bs ${Number(value).toFixed(2)}`
+}
+
+const resizeImage = (file, maxWidth = 800, maxHeight = 600, quality = 0.8) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let width = img.width
+        let height = img.height
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width
+          width = maxWidth
+        }
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height
+          height = maxHeight
+        }
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, width, height)
+        canvas.toBlob((blob) => {
+          const resizedFile = new File([blob], file.name, { type: 'image/jpeg' })
+          resolve(resizedFile)
+        }, 'image/jpeg', quality)
+      }
+      img.src = e.target.result
+    }
+    reader.readAsDataURL(file)
+  })
 }
 
 const openAddModal = () => {
@@ -73,15 +105,22 @@ const closeModal = () => {
   imagePreview.value = ''
 }
 
-const onFileChange = (event) => {
+const removeImage = () => {
+  imageFile.value = null
+  imagePreview.value = ''
+  formData.value.imagen = null
+}
+
+const onFileChange = async (event) => {
   const file = event.target.files?.[0]
   if (!file) {
     imageFile.value = null
     imagePreview.value = ''
     return
   }
-  imageFile.value = file
-  imagePreview.value = URL.createObjectURL(file)
+  const resized = await resizeImage(file)
+  imageFile.value = resized
+  imagePreview.value = URL.createObjectURL(resized)
 }
 
 const saveItem = async () => {
@@ -242,7 +281,7 @@ onMounted(async () => {
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">Precio (MXN)</label>
+                <label class="form-label">Precio (Bs)</label>
                 <input v-model="formData.price" type="number" step="0.01" class="input" placeholder="0.00" required />
               </div>
             </div>
@@ -257,6 +296,9 @@ onMounted(async () => {
               <input @change="onFileChange" type="file" accept="image/*" class="input" />
               <div v-if="imagePreview" class="image-preview">
                 <img :src="imagePreview" alt="Vista previa" />
+                <button type="button" @click="removeImage" class="remove-image-btn">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
               </div>
             </div>
             
@@ -445,6 +487,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.menu-card-image-inner {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
 }
 
 .menu-card-image .material-symbols-outlined {
@@ -561,6 +611,8 @@ onMounted(async () => {
   border-radius: var(--radius-2xl);
   width: 100%;
   max-width: 32rem;
+  max-height: 90vh;
+  overflow-y: auto;
   padding: 1.5rem;
 }
 
@@ -648,6 +700,51 @@ onMounted(async () => {
 
 .modal-actions .btn {
   flex: 1;
+}
+
+/* Image Preview */
+.image-preview {
+  position: relative;
+  margin-top: 0.75rem;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--outline-variant);
+  max-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-container);
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  display: block;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: var(--radius-full);
+  color: white;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-base);
+}
+
+.remove-image-btn:hover {
+  background: rgba(186, 26, 26, 0.8);
+}
+
+.remove-image-btn .material-symbols-outlined {
+  font-size: 1.25rem;
 }
 
 /* Badges */
