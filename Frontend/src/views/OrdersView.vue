@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { useAuthStore } from '@/stores/auth'
+import { apiFetch } from '@/utils/api'
 
 const store = useRestaurantStore()
 const authStore = useAuthStore()
@@ -219,7 +220,7 @@ const saveOrder = async () => {
       items: validItems
     }
 
-    const orderResponse = await fetch('http://localhost:3000/api/orders', {
+    const orderResponse = await apiFetch('http://localhost:3000/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

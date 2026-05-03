@@ -75,8 +75,13 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem("token")
-  const rawUser = localStorage.getItem("user")
-  const user = rawUser ? JSON.parse(rawUser) : null
+  let user = null
+  try {
+    const rawUser = localStorage.getItem("user")
+    user = rawUser ? JSON.parse(rawUser) : null
+  } catch {
+    user = null
+  }
 
   if (to.path === "/login") {
     if (token) {

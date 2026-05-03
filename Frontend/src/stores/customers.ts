@@ -1,12 +1,13 @@
-import { defineStore } from "pinia";
+import { defineStore } from "pinia"
+import { apiFetch } from "@/utils/api"
 
 interface Customer {
-  id: number;
-  nombre: string;
-  telefono: string;
-  correo: string | null;
-  notas: string | null;
-  creado_en: string;
+  id: number
+  nombre: string
+  telefono: string
+  correo: string | null
+  notas: string | null
+  creado_en: string
 }
 
 export const useCustomersStore = defineStore("customers", {
@@ -16,15 +17,11 @@ export const useCustomersStore = defineStore("customers", {
   actions: {
     async fetchCustomers() {
       try {
-        const response = await fetch("http://localhost:3000/api/customers");
-        if (!response.ok) {
-          throw new Error("Failed to fetch customers");
-        }
-        const data = await response.json();
-        this.customers = data;
+        const data = await apiFetch("http://localhost:3000/api/customers")
+        this.customers = data
       } catch (error) {
-        console.error("Error fetching customers:", error);
+        console.error("Error fetching customers:", error)
       }
     },
   },
-});
+})

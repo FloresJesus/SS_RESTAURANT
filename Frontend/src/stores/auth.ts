@@ -42,7 +42,17 @@ export const useAuthStore = defineStore("auth", {
         }
 
         if (rawUser && rawUser.length > 0) {
-          this.user = JSON.parse(rawUser)
+          try {
+            const parsed = JSON.parse(rawUser)
+            if (parsed && typeof parsed === "object") {
+              this.user = parsed
+            } else {
+              throw new Error("Invalid user data")
+            }
+          } catch {
+            this.user = null
+            localStorage.removeItem("user")
+          }
         }
       } catch {
         this.token = null

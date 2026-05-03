@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useUsersStore } from '@/stores/users'
+import { apiFetch } from '@/utils/api'
 
 const usersStore = useUsersStore()
 
@@ -109,13 +110,13 @@ const saveEmployee = async () => {
   try {
     let response
     if (editingEmployee.value) {
-      response = await fetch(`http://localhost:3000/api/users/${editingEmployee.value.id}`, {
+      response = await apiFetch(`http://localhost:3000/api/users/${editingEmployee.value.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
     } else {
-      response = await fetch('http://localhost:3000/api/users', {
+      response = await apiFetch('http://localhost:3000/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -139,7 +140,7 @@ const saveEmployee = async () => {
 
 const toggleStatus = async (employee) => {
   try {
-    const response = await fetch(`http://localhost:3000/api/users/${employee.id}`, {
+    const response = await apiFetch(`http://localhost:3000/api/users/${employee.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

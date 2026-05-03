@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useCustomersStore } from '@/stores/customers'
+import { apiFetch } from '@/utils/api'
 
 const customersStore = useCustomersStore()
 
@@ -101,13 +102,13 @@ const saveCustomer = async () => {
   try {
     let response
     if (editingCustomer.value) {
-      response = await fetch(`http://localhost:3000/api/customers/${editingCustomer.value.id}`, {
+      response = await apiFetch(`http://localhost:3000/api/customers/${editingCustomer.value.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
     } else {
-      response = await fetch('http://localhost:3000/api/customers', {
+      response = await apiFetch('http://localhost:3000/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -130,7 +131,7 @@ const deleteCustomer = async (customer) => {
   if (!confirm(`¿Estás seguro de eliminar a ${customer.nombre}?`)) return
 
   try {
-    const response = await fetch(`http://localhost:3000/api/customers/${customer.id}`, {
+    const response = await apiFetch(`http://localhost:3000/api/customers/${customer.id}`, {
       method: 'DELETE'
     })
 

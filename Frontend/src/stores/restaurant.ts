@@ -1,28 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api'
-
-const fetchJson = async (url: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('token')
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> || {})
-  }
-  if (token && !url.includes('/auth/')) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-  const response = await fetch(url, { ...options, headers })
-  if (!response.ok) {
-    const error = await response.text()
-    if (response.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
-    }
-    throw new Error(error || response.statusText)
-  }
-  return response.json()
-}
+import { apiFetch, API_BASE } from '@/utils/api'
 
 export const useRestaurantStore = defineStore('restaurant', () => {
   const menuItems = ref([
@@ -71,7 +49,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const loadMenuItems = async () => {
     try {
-      const data = await fetchJson(`${API_BASE}/menu`)
+      const data = await apiFetch(`${API_BASE}/menu`)
       menuItems.value = data.map((item: any) => ({
         id: item.id,
         name: item.nombre,
@@ -92,7 +70,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
   const uploadMenuImage = async (file: File) => {
     const formData = new FormData()
     formData.append('image', file)
-    return fetchJson(`${API_BASE}/menu/upload`, {
+    return apiFetch(`${API_BASE}/menu/upload`, {
       method: 'POST',
       body: formData
     })
@@ -116,7 +94,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
         payload.imagen = upload.path
       }
 
-      await fetchJson(`${API_BASE}/menu`, {
+      await apiFetch(`${API_BASE}/menu`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -145,7 +123,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
         payload.imagen = upload.imageUrl
       }
 
-      await fetchJson(`${API_BASE}/menu/${id}`, {
+      await apiFetch(`${API_BASE}/menu/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -158,7 +136,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const deleteMenuItem = async (id: number) => {
     try {
-      await fetchJson(`${API_BASE}/menu/${id}`, { method: 'DELETE' })
+      await apiFetch(`${API_BASE}/menu/${id}`, { method: 'DELETE' })
       menuItems.value = menuItems.value.filter((item) => item.id !== id)
     } catch (error) {
       console.error("Error eliminando menu:", error)
@@ -167,7 +145,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const loadOrders = async () => {
     try {
-      const data = await fetchJson(`${API_BASE}/orders`)
+      const data = await apiFetch(`${API_BASE}/orders`)
       orders.value = data
     } catch (error) {
       console.error("Error cargando pedidos:", error)
@@ -176,7 +154,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const updateOrderStatus = async (id: number, status: string) => {
     try {
-      await fetchJson(`${API_BASE}/orders/${id}/status`, {
+      await apiFetch(`${API_BASE}/orders/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -189,7 +167,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const createOrder = async (order: any) => {
     try {
-      await fetchJson(`${API_BASE}/orders`, {
+      await apiFetch(`${API_BASE}/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(order)
@@ -202,7 +180,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const loadTables = async () => {
     try {
-      const data = await fetchJson(`${API_BASE}/tables`)
+      const data = await apiFetch(`${API_BASE}/tables`)
       tables.value = data.map((row: any) => ({
         id: row.id,
         number: row.nombre || `Mesa ${row.id}`,
@@ -235,7 +213,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const createTable = async (table: any) => {
     try {
-      await fetchJson(`${API_BASE}/tables`, {
+      await apiFetch(`${API_BASE}/tables`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(table)
@@ -254,7 +232,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const loadReservations = async () => {
     try {
-      const data = await fetchJson(`${API_BASE}/reservations`)
+      const data = await apiFetch(`${API_BASE}/reservations`)
       reservations.value = data.map((item: any) => ({
         id: item.id,
         mesa_id: item.mesa_id,
@@ -275,7 +253,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const createReservation = async (reservation: any) => {
     try {
-      await fetchJson(`${API_BASE}/reservations`, {
+      await apiFetch(`${API_BASE}/reservations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reservation)
@@ -289,7 +267,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const updateReservation = async (id: number, update: any) => {
     try {
-      await fetchJson(`${API_BASE}/reservations/${id}`, {
+      await apiFetch(`${API_BASE}/reservations/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(update)
@@ -303,7 +281,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const loadCustomers = async () => {
     try {
-      const data = await fetchJson(`${API_BASE}/customers`)
+      const data = await apiFetch(`${API_BASE}/customers`)
       customers.value = data.map((item: any) => ({
         id: item.id,
         name: item.nombre,
@@ -318,7 +296,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const createCustomer = async (customer: any) => {
     try {
-      const response = await fetchJson(`${API_BASE}/customers`, {
+      const response = await apiFetch(`${API_BASE}/customers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -338,7 +316,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const createPayment = async (payment: any) => {
     try {
-      const response = await fetchJson(`${API_BASE}/payments`, {
+      const response = await apiFetch(`${API_BASE}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payment)
@@ -352,7 +330,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const getPayments = async (pedido_id: number) => {
     try {
-      const data = await fetchJson(`${API_BASE}/payments?pedido_id=${pedido_id}`)
+      const data = await apiFetch(`${API_BASE}/payments?pedido_id=${pedido_id}`)
       return data
     } catch (error) {
       console.error("Error obteniendo pagos:", error)
