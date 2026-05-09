@@ -4,7 +4,10 @@ const {
   createOrder,
   createOrderDetail,
   updateOrderStatus,
-  findOrderById
+  findOrderById,
+  getWeeklySales,
+  getSalesByCategory,
+  getTodaySales
 } = require("../models/orderModels")
 
 const mapKitchenStatus = (estado_cocina) => {
@@ -110,8 +113,50 @@ const updateExistingOrderStatus = async (req, res) => {
   }
 }
 
+const getSalesStats = async (req, res) => {
+  try {
+    const weeklyRows = await getWeeklySales()
+    const categoryRows = await getSalesByCategory()
+    const today = await getTodaySales()
+
+    const dayNames = { Monday: 'Lun', Tuesday: 'Mar', Wednesday: 'Mié', Thursday: 'Jue', Friday: 'Vie', Saturday: 'Sáb', Sunday: 'Dom' }
+    const dayOrder = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+    const weekly = dayOrder.map(day => {
+      const found = weeklyRows.find(r => dayNames[r.dia_nombre] === day)
+      return { day, sales: found ? Number(found.total_ventas) : 0 }
+    })
+
+    const categories = categoryRows.map(r => ({
+      name: r.categoria,
+      value: Number(r.total_ventas)
+    }))
+
+    const categoryNames = ['Platos', 'Bebidas', 'Postres', 'Entradas']
+    categoryNames.forEach(name => {
+      if (!categories.find(c => c.name === name)) {
+        categories.push({ name, value: 0 })
+      }
+    })
+
+    res.json({
+      weekly,
+      categories: categories.slice(0, 4),
+      today: {
+        orders: Number(today.cantidad_pedidos),
+        sales: Number(today.total_ventas),
+        avgTicket: Number(today.ticket_promedio)
+      }
+    })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ message: "Error al obtener estadisticas" })
+  }
+}
+
 module.exports = {
   getAllOrders,
   createNewOrder,
-  updateExistingOrderStatus
+  updateExistingOrderStatus,
+  getSalesStats
 }

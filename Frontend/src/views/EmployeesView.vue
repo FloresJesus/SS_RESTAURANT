@@ -108,15 +108,14 @@ const saveEmployee = async () => {
   }
 
   try {
-    let response
     if (editingEmployee.value) {
-      response = await apiFetch(`http://localhost:3000/api/users/${editingEmployee.value.id}`, {
+      await apiFetch(`http://localhost:3000/api/users/${editingEmployee.value.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
     } else {
-      response = await apiFetch('http://localhost:3000/api/users', {
+      await apiFetch('http://localhost:3000/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -126,21 +125,17 @@ const saveEmployee = async () => {
       })
     }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null)
-      throw new Error(errorData?.message || 'Error al guardar empleado')
-    }
-
     await loadEmployees()
     closeModal()
   } catch (error) {
     console.error('Error guardando empleado:', error)
+    alert(error.message || 'Error al guardar empleado')
   }
 }
 
 const toggleStatus = async (employee) => {
   try {
-    const response = await apiFetch(`http://localhost:3000/api/users/${employee.id}`, {
+    await apiFetch(`http://localhost:3000/api/users/${employee.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -152,13 +147,10 @@ const toggleStatus = async (employee) => {
       })
     })
 
-    if (!response.ok) {
-      throw new Error('Error al cambiar estado')
-    }
-
     await loadEmployees()
   } catch (error) {
     console.error('Error actualizando estado:', error)
+    alert(error.message || 'Error al cambiar estado')
   }
 }
 </script>

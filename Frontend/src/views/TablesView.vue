@@ -74,13 +74,18 @@ const saveTable = async () => {
   if (!tableForm.value.nombre || tableForm.value.capacidad <= 0) {
     return
   }
-  await store.createTable({
-    nombre: tableForm.value.nombre,
-    capacidad: Number(tableForm.value.capacidad),
-    ubicacion: tableForm.value.ubicacion || null,
-    activa: tableForm.value.activa
-  })
-  showTableModal.value = false
+  try {
+    await store.createTable({
+      nombre: tableForm.value.nombre,
+      capacidad: Number(tableForm.value.capacidad),
+      ubicacion: tableForm.value.ubicacion || null,
+      activa: tableForm.value.activa
+    })
+    showTableModal.value = false
+  } catch (error) {
+    console.error('Error creando mesa:', error)
+    alert(error.message || 'Error al crear mesa')
+  }
 }
 
 const openReservationModal = () => {
@@ -98,43 +103,58 @@ const openReservationModal = () => {
 }
 
 const saveReservation = async () => {
-  await store.createReservation({
-    nombre: reservationForm.value.name,
-    telefono: reservationForm.value.phone,
-    correo: reservationForm.value.email || null,
-    mesa_id: reservationForm.value.tableId,
-    fecha: reservationForm.value.date,
-    hora: reservationForm.value.time,
-    personas: reservationForm.value.guests,
-    notas: reservationForm.value.notes
-  })
-  showReservationModal.value = false
+  try {
+    await store.createReservation({
+      nombre: reservationForm.value.name,
+      telefono: reservationForm.value.phone,
+      correo: reservationForm.value.email || null,
+      mesa_id: reservationForm.value.tableId,
+      fecha: reservationForm.value.date,
+      hora: reservationForm.value.time,
+      personas: reservationForm.value.guests,
+      notas: reservationForm.value.notes
+    })
+    showReservationModal.value = false
+  } catch (error) {
+    console.error('Error creando reservacion:', error)
+    alert(error.message || 'Error al crear reservacion')
+  }
 }
 
 const confirmReservation = async (id) => {
   const reservation = store.reservations.find((r) => r.id === id)
   if (!reservation) return
-  await store.updateReservation(id, {
-    mesa_id: reservation.mesa_id,
-    fecha: reservation.date,
-    hora: reservation.time,
-    personas: reservation.guests,
-    estado: 'confirmada',
-    notas: reservation.notes
-  })
+  try {
+    await store.updateReservation(id, {
+      mesa_id: reservation.mesa_id,
+      fecha: reservation.date,
+      hora: reservation.time,
+      personas: reservation.guests,
+      estado: 'confirmada',
+      notas: reservation.notes
+    })
+  } catch (error) {
+    console.error('Error confirmando reservacion:', error)
+    alert(error.message || 'Error al confirmar reservacion')
+  }
 }
 
 const cancelReservation = async (id) => {
   const reservation = store.reservations.find((r) => r.id === id)
   if (!reservation) return
-  await store.updateReservation(id, {
-    mesa_id: reservation.mesa_id,
-    fecha: reservation.date,
-    hora: reservation.time,
-    personas: reservation.guests,
-    estado: 'cancelada',
-    notas: reservation.notes
-  })
+  try {
+    await store.updateReservation(id, {
+      mesa_id: reservation.mesa_id,
+      fecha: reservation.date,
+      hora: reservation.time,
+      personas: reservation.guests,
+      estado: 'cancelada',
+      notas: reservation.notes
+    })
+  } catch (error) {
+    console.error('Error cancelando reservacion:', error)
+    alert(error.message || 'Error al cancelar reservacion')
+  }
 }
 
 onMounted(async () => {

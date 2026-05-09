@@ -100,30 +100,25 @@ const saveCustomer = async () => {
   }
 
   try {
-    let response
     if (editingCustomer.value) {
-      response = await apiFetch(`http://localhost:3000/api/customers/${editingCustomer.value.id}`, {
+      await apiFetch(`http://localhost:3000/api/customers/${editingCustomer.value.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
     } else {
-      response = await apiFetch('http://localhost:3000/api/customers', {
+      await apiFetch('http://localhost:3000/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
     }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null)
-      throw new Error(errorData?.message || 'Error al guardar cliente')
-    }
-
     await loadCustomers()
     closeModal()
   } catch (error) {
     console.error('Error guardando cliente:', error)
+    alert(error.message || 'Error al guardar cliente')
   }
 }
 
@@ -131,17 +126,14 @@ const deleteCustomer = async (customer) => {
   if (!confirm(`¿Estás seguro de eliminar a ${customer.nombre}?`)) return
 
   try {
-    const response = await apiFetch(`http://localhost:3000/api/customers/${customer.id}`, {
+    await apiFetch(`http://localhost:3000/api/customers/${customer.id}`, {
       method: 'DELETE'
     })
-
-    if (!response.ok) {
-      throw new Error('Error al eliminar cliente')
-    }
 
     await loadCustomers()
   } catch (error) {
     console.error('Error eliminando cliente:', error)
+    alert(error.message || 'Error al eliminar cliente')
   }
 }
 </script>

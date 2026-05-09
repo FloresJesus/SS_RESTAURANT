@@ -65,6 +65,30 @@ const formatCurrency = (value) => {
   return `Bs ${Number(value).toFixed(2)}`
 }
 
+const menuOptions = computed(() =>
+  store.menuItems.filter(m => m.available).map(m => ({
+    id: m.id,
+    name: `${m.name} (Bs ${m.price.toFixed(2)})`
+  }))
+)
+
+const addItemRow = () => {
+  orderForm.value.items.push({ plato_id: null, qty: 1, price: 0, notes: '' })
+}
+
+const removeItemRow = (idx) => {
+  if (orderForm.value.items.length > 1) {
+    orderForm.value.items.splice(idx, 1)
+  }
+}
+
+const updateItemPrice = (idx) => {
+  const selected = store.menuItems.find(m => m.id === orderForm.value.items[idx].plato_id)
+  if (selected) {
+    orderForm.value.items[idx].price = selected.price
+  }
+}
+
 const canCreateOrder = computed(() => ['admin', 'camarero'].includes(userRole.value))
 
 const canUpdateTo = (orderStatus) => {
@@ -160,7 +184,12 @@ const createOrder = async () => {
 
 const updateStatus = async (orderId, newStatus) => {
   if (!canUpdateTo(store.orders.find(o => o.id === orderId)?.status)) return
-  await store.updateOrderStatus(orderId, newStatus)
+  try {
+    await store.updateOrderStatus(orderId, newStatus)
+  } catch (error) {
+    console.error('Error actualizando estado:', error)
+    alert(error.message || 'Error al actualizar estado')
+  }
 }
 
 const canSeeWaiterInfo = computed(() => userRole.value !== 'cocina')
@@ -220,17 +249,14 @@ const saveOrder = async () => {
       items: validItems
     }
 
-    const orderResponse = await apiFetch('http://localhost:3000/api/orders', {
+    const orderData = await apiFetch('http://localhost:3000/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-
-    if (!orderResponse.ok) throw new Error('Error al crear pedido')
-    const orderData = await orderResponse.json()
     const orderId = orderData.id
 
-    // Procesar pago automático
+    // Procesar pago automatico
     if (orderId && orderTotal.value > 0) {
       try {
         await store.createPayment({

@@ -39,9 +39,24 @@ const stats = computed(() => {
   const pendingOrders = store.orders.filter(order => order.status === 'pending').length
   const preparingOrders = store.orders.filter(order => order.status === 'preparing').length
   const readyOrders = store.orders.filter(order => order.status === 'ready').length
-  const avgTicket = ordersToday ? store.orders.reduce((sum, order) => sum + order.total, 0) / ordersToday : 0
+  const avgTicket = ordersToday ? store.orders.reduce((sum, order) => sum + Number(order.total), 0) / ordersToday : 0
   const occupiedTables = store.tables.filter(table => table.status !== 'available').length
   const availableTables = store.tables.filter(table => table.status === 'available').length
+
+  const weeklyData = store.salesData.weekly
+  const todaySalesNum = weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].sales : 0
+  const yesterdaySalesNum = weeklyData.length > 1 ? weeklyData[weeklyData.length - 2].sales : 0
+  const prevWeekAvg = weeklyData.length >= 7
+    ? weeklyData.slice(0, -1).reduce((s, d) => s + d.sales, 0) / 6
+    : 0
+
+  const trendVsYesterday = yesterdaySalesNum > 0
+    ? Math.round(((todaySalesNum - yesterdaySalesNum) / yesterdaySalesNum) * 100)
+    : null
+
+  const trendVsWeek = prevWeekAvg > 0
+    ? Math.round(((todaySalesNum - prevWeekAvg) / prevWeekAvg) * 100)
+    : null
 
   return {
     todaySales: totalSales,
@@ -51,7 +66,12 @@ const stats = computed(() => {
     readyOrders,
     avgTicket,
     occupancy: store.tables.length ? Math.round((occupiedTables / store.tables.length) * 100) : 0,
-    availableTables
+    availableTables,
+    trendVsYesterday,
+    trendVsWeek,
+    todaySalesNum,
+    yesterdaySalesNum,
+    prevWeekAvg
   }
 })
 
@@ -101,21 +121,27 @@ const lineChartOptions = {
       grid: { color: '#e1e3e2' },
       ticks: { 
         color: '#707975',
-        callback: (value) => 'Bs ' + value + 'k'
+        callback: (value) => formatCurrency(value)
       }
     }
   }
 }
 
-const doughnutChartData = computed(() => ({
-  labels: store.salesData.categories.map(c => c.name),
-  datasets: [{
-    data: store.salesData.categories.map(c => c.value),
-    backgroundColor: ['#00342b', '#22c55e', '#3b82f6', '#f59e0b'],
-    borderColor: '#f8faf9',
-    borderWidth: 3,
-  }]
-}))
+const doughnutChartData = computed(() => {
+  const data = store.salesData.categories.map(c => c.value)
+  const hasData = data.some(v => v > 0)
+  return {
+    labels: store.salesData.categories.map(c => c.name),
+    datasets: [{
+      data: hasData ? data : [1, 1, 1, 1],
+      backgroundColor: hasData
+        ? ['#00342b', '#22c55e', '#3b82f6', '#f59e0b']
+        : ['#e8ede9', '#e8ede9', '#e8ede9', '#e8ede9'],
+      borderColor: '#f8faf9',
+      borderWidth: 3,
+    }]
+  }
+})
 
 const doughnutChartOptions = {
   responsive: true,
@@ -146,6 +172,7 @@ const statusLabels = {
 onMounted(async () => {
   await store.loadOrders()
   await store.loadTables()
+  await store.loadSalesStats()
 })
 </script>
 
@@ -165,10 +192,11 @@ onMounted(async () => {
           <div class="stat-info">
             <p class="stat-label">Ventas de Hoy</p>
             <p class="stat-value">{{ formatCurrency(stats.todaySales) }}</p>
-            <p class="stat-trend stat-trend-up">
-              <span class="material-symbols-outlined">trending_up</span>
-              +12.5% vs ayer
+            <p v-if="stats.trendVsYesterday !== null" :class="['stat-trend', stats.trendVsYesterday >= 0 ? 'stat-trend-up' : 'stat-trend-down']">
+              <span class="material-symbols-outlined">{{ stats.trendVsYesterday >= 0 ? 'trending_up' : 'trending_down' }}</span>
+              {{ stats.trendVsYesterday >= 0 ? '+' : '' }}{{ stats.trendVsYesterday }}% vs ayer
             </p>
+            <p v-else class="stat-note">Sin datos de comparacion</p>
           </div>
           <div class="stat-icon stat-icon-primary">
             <span class="material-symbols-outlined">payments</span>
@@ -196,10 +224,11 @@ onMounted(async () => {
           <div class="stat-info">
             <p class="stat-label">Ticket Promedio</p>
             <p class="stat-value">{{ formatCurrency(stats.avgTicket) }}</p>
-            <p class="stat-trend stat-trend-up">
-              <span class="material-symbols-outlined">trending_up</span>
-              +5.2% vs semana
+            <p v-if="stats.trendVsWeek !== null" :class="['stat-trend', stats.trendVsWeek >= 0 ? 'stat-trend-up' : 'stat-trend-down']">
+              <span class="material-symbols-outlined">{{ stats.trendVsWeek >= 0 ? 'trending_up' : 'trending_down' }}</span>
+              {{ stats.trendVsWeek >= 0 ? '+' : '' }}{{ stats.trendVsWeek }}% vs semana
             </p>
+            <p v-else class="stat-note">Sin datos de comparacion</p>
           </div>
           <div class="stat-icon stat-icon-blue">
             <span class="material-symbols-outlined">confirmation_number</span>
@@ -419,6 +448,10 @@ onMounted(async () => {
 
 .stat-trend-up {
   color: var(--success);
+}
+
+.stat-trend-down {
+  color: var(--error);
 }
 
 .stat-note {

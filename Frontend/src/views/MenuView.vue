@@ -136,27 +136,40 @@ const saveItem = async () => {
     imageFile: imageFile.value
   }
 
-  if (editingItem.value) {
-    await store.updateMenuItem(editingItem.value.id, payload)
-  } else {
-    await store.addMenuItem(payload)
+  try {
+    if (editingItem.value) {
+      await store.updateMenuItem(editingItem.value.id, payload)
+    } else {
+      await store.addMenuItem(payload)
+    }
+    closeModal()
+  } catch (error) {
+    console.error('Error guardando platillo:', error)
+    alert(error.message || 'Error al guardar platillo')
   }
-
-  closeModal()
 }
 
 const deleteItem = async (id) => {
-  if (confirm('¿Estás seguro de eliminar este platillo?')) {
+  if (!confirm('¿Estas seguro de eliminar este platillo?')) return
+  try {
     await store.deleteMenuItem(id)
+  } catch (error) {
+    console.error('Error eliminando platillo:', error)
+    alert(error.message || 'Error al eliminar platillo')
   }
 }
 
 const toggleAvailability = async (item) => {
-  await store.updateMenuItem(item.id, {
-    ...item,
-    available: !item.available,
-    price: item.price
-  })
+  try {
+    await store.updateMenuItem(item.id, {
+      ...item,
+      available: !item.available,
+      price: item.price
+    })
+  } catch (error) {
+    console.error('Error actualizando platillo:', error)
+    alert(error.message || 'Error al actualizar platillo')
+  }
 }
 
 onMounted(async () => {
