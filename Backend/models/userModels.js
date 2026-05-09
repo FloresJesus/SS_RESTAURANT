@@ -1,24 +1,18 @@
 const db = require("../config/db")
 
-const createUser = async (nombre, apellido, correo, clave_hash, rol = 'camarero', activo = true) => {
-  const [result] = await db.query(
-    "INSERT INTO usuario (nombre, apellido, correo, clave_hash, rol, activo) VALUES (?, ?, ?, ?, ?, ?)",
-    [nombre, apellido, correo, clave_hash, rol, activo]
+const showUsers = async () => {
+  const [rows] = await db.query(
+    `SELECT id, nombre, apellido, email, rol, activo, creado_en
+     FROM usuario
+     ORDER BY creado_en DESC`
   )
-  return result
-}
-
-const updateUser = async (id, nombre, apellido, correo, rol = 'camarero', activo = true) => {
-  const [result] = await db.query(
-    "UPDATE usuario SET nombre = ?, apellido = ?, correo = ?, rol = ?, activo = ? WHERE id = ?",
-    [nombre, apellido, correo, rol, activo, id]
-  )
-  return result
+  return rows
 }
 
 const findUserById = async (id) => {
   const [rows] = await db.query(
-    "SELECT id, nombre, apellido, correo, rol, activo FROM usuario WHERE id = ?",
+    `SELECT id, nombre, apellido, email, rol, activo, creado_en
+     FROM usuario WHERE id = ?`,
     [id]
   )
   return rows[0]
@@ -26,23 +20,65 @@ const findUserById = async (id) => {
 
 const findUserByEmail = async (email) => {
   const [rows] = await db.query(
-    "SELECT * FROM usuario WHERE correo = ?",
+    `SELECT * FROM usuario WHERE email = ?`,
     [email]
   )
   return rows[0]
 }
 
-const showUsers = async () => {
+const createUser = async (nombre, apellido, email, password_hash, rol = 'mesero', activo = true) => {
+  const [result] = await db.query(
+    `INSERT INTO usuario (nombre, apellido, email, password_hash, rol, activo)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [nombre, apellido, email, password_hash, rol, activo]
+  )
+  return result
+}
+
+const updateUser = async (id, nombre, apellido, email, rol, activo = true) => {
+  const [result] = await db.query(
+    `UPDATE usuario
+     SET nombre = ?, apellido = ?, email = ?, rol = ?, activo = ?
+     WHERE id = ?`,
+    [nombre, apellido, email, rol, activo, id]
+  )
+  return result
+}
+
+const updateUserPassword = async (id, newPasswordHash) => {
+  const [result] = await db.query(
+    `UPDATE usuario SET password_hash = ? WHERE id = ?`,
+    [newPasswordHash, id]
+  )
+  return result
+}
+
+const deleteUser = async (id) => {
+  const [result] = await db.query(
+    `DELETE FROM usuario WHERE id = ?`,
+    [id]
+  )
+  return result
+}
+
+const getEmployeesByRole = async (rol) => {
   const [rows] = await db.query(
-    "SELECT id, nombre, apellido, correo, rol, activo FROM usuario"
+    `SELECT id, nombre, apellido, email, rol, activo
+     FROM usuario
+     WHERE rol = ? AND activo = TRUE
+     ORDER BY nombre`,
+    [rol]
   )
   return rows
 }
 
 module.exports = {
-  createUser,
-  updateUser,
+  showUsers,
   findUserById,
   findUserByEmail,
-  showUsers
+  createUser,
+  updateUser,
+  updateUserPassword,
+  deleteUser,
+  getEmployeesByRole
 }

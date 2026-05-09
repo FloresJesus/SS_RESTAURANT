@@ -1,41 +1,80 @@
 const bcrypt = require("bcryptjs")
 const {
   showUsers,
+  findUserById,
+  findUserByEmail,
   createUser: createUserModel,
   updateUser: updateUserModel,
-  findUserByEmail,
-  findUserById
+  deleteUser
 } = require("../models/userModels")
 
-const createUser = async (req, res) => {
-  const { nombre, apellido, correo, password, rol = 'camarero', activo = true } = req.body
+const getUsers = async (req, res) => {
+  try {
+    const users = await showUsers()
+    res.json(users)
+  } catch (error) {
+    console.error("Error al recuperar usuarios:", error)
+    res.status(500).json({ message: "Error al recuperar usuarios" })
+  }
+}
 
-  if (!nombre || !apellido || !correo || !password) {
-    return res.status(400).json({ message: "Nombre, apellido, correo y contraseña son obligatorios" })
+const getUserById = async (req, res) => {
+  const { id } = req.params
+
+  try {
+    const user = await findUserById(id)
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" })
+    }
+    res.json(user)
+  } catch (error) {
+    console.error("Error al recuperar usuario:", error)
+    res.status(500).json({ message: "Error al recuperar usuario" })
+  }
+}
+
+const createUser = async (req, res) => {
+  const { nombre, apellido, email, password, rol = 'mesero', activo = true } = req.body
+
+  if (!nombre || !email || !password) {
+    return res.status(400).json({ message: "Nombre, email y contrasena son obligatorios" })
+  }
+
+  const validRoles = ['admin', 'cajero', 'mesero', 'cocina']
+  if (rol && !validRoles.includes(rol)) {
+    return res.status(400).json({ message: `Rol invalido. Roles validos: ${validRoles.join(', ')}` })
   }
 
   try {
-    const existingUser = await findUserByEmail(correo)
+    const existingUser = await findUserByEmail(email)
     if (existingUser) {
-      return res.status(400).json({ message: "El usuario ya existe" })
+      return res.status(400).json({ message: "El email ya esta registrado" })
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)
-    await createUserModel(nombre, apellido, correo, hashedPassword, rol, activo)
+    const result = await createUserModel(nombre, apellido, email, hashedPassword, rol, activo)
 
-    res.status(201).json({ message: "Usuario creado correctamente" })
+    res.status(201).json({
+      message: "Usuario creado correctamente",
+      id: result.insertId
+    })
   } catch (error) {
-    console.error(error)
+    console.error("Error al crear usuario:", error)
     res.status(500).json({ message: "Error al crear usuario" })
   }
 }
 
 const updateUser = async (req, res) => {
   const { id } = req.params
-  const { nombre, apellido, correo, rol = 'camarero', activo = true } = req.body
+  const { nombre, apellido, email, rol, activo = true } = req.body
 
-  if (!nombre || !apellido || !correo) {
-    return res.status(400).json({ message: "Nombre, apellido y correo son obligatorios" })
+  if (!nombre || !email) {
+    return res.status(400).json({ message: "Nombre y email son obligatorios" })
+  }
+
+  const validRoles = ['admin', 'cajero', 'mesero', 'cocina']
+  if (rol && !validRoles.includes(rol)) {
+    return res.status(400).json({ message: `Rol invalido. Roles validos: ${validRoles.join(', ')}` })
   }
 
   try {
@@ -44,35 +83,48 @@ const updateUser = async (req, res) => {
       return res.status(404).json({ message: "Usuario no encontrado" })
     }
 
-    const userWithSameEmail = await findUserByEmail(correo)
+    const userWithSameEmail = await findUserByEmail(email)
     if (userWithSameEmail && userWithSameEmail.id !== Number(id)) {
-      return res.status(400).json({ message: "El correo ya está en uso por otro usuario" })
+      return res.status(400).json({ message: "El email ya esta en uso por otro usuario" })
     }
 
-    const result = await updateUserModel(id, nombre, apellido, correo, rol, activo)
+    const result = await updateUserModel(id, nombre, apellido, email, rol || existingUser.rol, activo)
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Usuario no encontrado" })
     }
 
     res.json({ message: "Usuario actualizado correctamente" })
   } catch (error) {
-    console.error(error)
+    console.error("Error al actualizar usuario:", error)
     res.status(500).json({ message: "Error al actualizar usuario" })
   }
 }
 
-const getUsers = async (req, res) => {
+const deleteUserById = async (req, res) => {
+  const { id } = req.params
+
   try {
-    const users = await showUsers()
-    res.json(users)
+    const existingUser = await findUserById(id)
+    if (!existingUser) {
+      return res.status(404).json({ message: "Usuario no encontrado" })
+    }
+
+    const result = await deleteUser(id)
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado" })
+    }
+
+    res.json({ message: "Usuario eliminado correctamente" })
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ message: "Error al recuperar usuarios" })
+    console.error("Error al eliminar usuario:", error)
+    res.status(500).json({ message: "Error al eliminar usuario" })
   }
 }
 
 module.exports = {
   getUsers,
+  getUserById,
   createUser,
-  updateUser
+  updateUser,
+  deleteUserById
 }

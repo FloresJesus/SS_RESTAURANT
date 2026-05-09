@@ -10,9 +10,12 @@ import AdminLayout from "@/layouts/AdminLayout.vue"
 import CustomersView from "@/views/CustomersView.vue"
 import ReservationView from "@/views/ReservationView.vue"
 
+type UserRole = 'admin' | 'cajero' | 'mesero' | 'cocina'
+
 const ROLE_ACCESS: Record<string, string[]> = {
   admin: ["dashboard", "customers", "menu", "orders", "tables", "employees"],
-  camarero: ["dashboard", "customers", "menu", "orders", "tables"],
+  cajero: ["dashboard", "orders", "payments"],
+  mesero: ["dashboard", "customers", "menu", "orders", "tables"],
   cocina: ["dashboard", "orders"]
 }
 
@@ -39,27 +42,27 @@ const router = createRouter({
         {
           path: "",
           component: DashboardView,
-          meta: { roles: ["admin", "camarero", "cocina"] }
+          meta: { roles: ["admin", "cajero", "mesero", "cocina"] }
         },
         {
           path: "customers",
           component: CustomersView,
-          meta: { roles: ["admin", "camarero"] }
+          meta: { roles: ["admin", "cajero", "mesero"] }
         },
         {
           path: "menu",
           component: MenuView,
-          meta: { roles: ["admin", "camarero", "cocina"] }
+          meta: { roles: ["admin", "cajero", "mesero", "cocina"] }
         },
         {
           path: "orders",
           component: OrdersView,
-          meta: { roles: ["admin", "camarero", "cocina"] }
+          meta: { roles: ["admin", "cajero", "mesero", "cocina"] }
         },
         {
           path: "tables",
           component: TablesView,
-          meta: { roles: ["admin", "camarero"] }
+          meta: { roles: ["admin", "cajero", "mesero"] }
         },
         {
           path: "employees",

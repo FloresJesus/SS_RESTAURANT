@@ -5,13 +5,17 @@ interface User {
   nombre: string
   apellido: string
   email: string
-  rol: string
+  rol: 'admin' | 'cajero' | 'mesero' | 'cocina'
   activo: boolean
 }
 
 interface LoginResponse {
   token: string
   user: User
+}
+
+interface ErrorResponse {
+  message: string
 }
 
 interface LoginResult {
@@ -27,7 +31,11 @@ export const useAuthStore = defineStore("auth", {
   }),
 
   getters: {
-    isAuthenticated: (state) => state.token !== null && state.token !== ""
+    isAuthenticated: (state) => state.token !== null && state.token !== "",
+    isAdmin: (state) => state.user?.rol === "admin",
+    isCajero: (state) => state.user?.rol === "cajero",
+    isMesero: (state) => state.user?.rol === "mesero",
+    isCocina: (state) => state.user?.rol === "cocina"
   },
 
   actions: {
@@ -63,35 +71,27 @@ export const useAuthStore = defineStore("auth", {
     },
 
     async login(email: string, password: string): Promise<LoginResult> {
-
       try {
-
-        const response = await fetch("http://localhost:3000/api/auth/login", {
-
+        const response = await fetch("/api/auth/login", {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json"
           },
-
           body: JSON.stringify({
             email,
             password
           })
-
         })
 
-        const data: LoginResponse = await response.json()
-
         if (!response.ok) {
-
+          const errorData: ErrorResponse = await response.json()
           return {
             success: false,
-            error: "Credenciales incorrectas"
+            error: errorData.message || "Credenciales incorrectas"
           }
-
         }
 
+        const data: LoginResponse = await response.json()
         this.token = data.token
         this.user = data.user
 
@@ -99,28 +99,19 @@ export const useAuthStore = defineStore("auth", {
         localStorage.setItem("user", JSON.stringify(data.user))
 
         return { success: true }
-
       } catch (error) {
-
         return {
           success: false,
-          error: "Error de conexión con el servidor"
+          error: "Error de conexion con el servidor"
         }
-
       }
-
     },
 
     logout() {
-
       this.user = null
       this.token = null
-
       localStorage.removeItem("token")
       localStorage.removeItem("user")
-
     }
-
   }
-
 })

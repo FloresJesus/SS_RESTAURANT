@@ -1,13 +1,16 @@
 import { defineStore } from "pinia"
 import { apiFetch } from "@/utils/api"
 
+type UserRole = 'admin' | 'cajero' | 'mesero' | 'cocina'
+
 interface User {
   id: number
-  firstName: string
-  lastName: string
+  nombre: string
+  apellido: string
   email: string
-  rol: string
-  active: boolean
+  rol: UserRole
+  activo: boolean
+  creado_en: string
 }
 
 export const useUsersStore = defineStore("users", {
@@ -17,18 +20,38 @@ export const useUsersStore = defineStore("users", {
   actions: {
     async fetchUsers() {
       try {
-        const data = await apiFetch("http://localhost:3000/api/users")
+        const data = await apiFetch("/api/users")
         this.users = data.map((user: any) => ({
           id: user.id,
-          firstName: user.nombre,
-          lastName: user.apellido,
-          email: user.correo,
+          nombre: user.nombre,
+          apellido: user.apellido,
+          email: user.email,
           rol: user.rol,
-          active: Boolean(user.activo),
+          activo: Boolean(user.activo),
+          creado_en: user.creado_en
         }))
       } catch (error) {
         console.error("Error fetching users:", error)
       }
     },
+    async createUser(user: any) {
+      return apiFetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(user)
+      })
+    },
+    async updateUser(id: number, user: any) {
+      return apiFetch(`/api/users/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(user)
+      })
+    },
+    async deleteUser(id: number) {
+      return apiFetch(`/api/users/${id}`, {
+        method: "DELETE"
+      })
+    }
   },
 })

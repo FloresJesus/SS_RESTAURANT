@@ -16,23 +16,22 @@ const editingItem = ref(null)
 const imageFile = ref(null)
 const imagePreview = ref('')
 
-const categories = ['all', 'Platos Principales', 'Entradas', 'Postres', 'Bebidas']
+const categories = computed(() => ['all', ...store.categories.map(c => c.nombre)])
 
 const formData = ref({
-  name: '',
-  category: 'Platos Principales',
-  price: '',
-  description: '',
-  available: true,
-  nota_alergenos: '',
-  tiempo_cocina_min: 15,
-  imagen: null
+  nombre: '',
+  categoria_id: null,
+  categoria: '',
+  precio: '',
+  descripcion: '',
+  disponible: true,
+  imagen_url: null
 })
 
 const filteredItems = computed(() => {
   return store.menuItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchesCategory = selectedCategory.value === 'all' || item.category === selectedCategory.value
+    const matchesSearch = item.nombre.toLowerCase().includes(searchQuery.value.toLowerCase())
+    const matchesCategory = selectedCategory.value === 'all' || item.categoria_nombre === selectedCategory.value
     return matchesSearch && matchesCategory
   })
 })
@@ -78,14 +77,13 @@ const openAddModal = () => {
   imageFile.value = null
   imagePreview.value = ''
   formData.value = {
-    name: '',
-    category: 'Platos Principales',
-    price: '',
-    description: '',
-    available: true,
-    nota_alergenos: '',
-    tiempo_cocina_min: 15,
-    imagen: null
+    nombre: '',
+    categoria_id: null,
+    categoria: '',
+    precio: '',
+    descripcion: '',
+    disponible: true,
+    imagen_url: null
   }
   showModal.value = true
 }
@@ -93,12 +91,15 @@ const openAddModal = () => {
 const openEditModal = (item) => {
   editingItem.value = item
   imageFile.value = null
-  imagePreview.value = item.imagen || ''
+  imagePreview.value = item.imagen_url || ''
   formData.value = {
-    ...item,
-    category: item.category || 'Platos Principales',
-    nota_alergenos: item.nota_alergenos || '',
-    tiempo_cocina_min: item.tiempo_cocina_min || 15
+    nombre: item.nombre,
+    categoria_id: item.categoria_id,
+    categoria: item.categoria_nombre || '',
+    precio: item.precio,
+    descripcion: item.descripcion || '',
+    disponible: item.disponible,
+    imagen_url: item.imagen_url
   }
   showModal.value = true
 }
@@ -129,10 +130,13 @@ const onFileChange = async (event) => {
 }
 
 const saveItem = async () => {
+  const categoria = store.categories.find(c => c.nombre === formData.value.categoria)
   const payload = {
-    ...formData.value,
-    price: Number(formData.value.price),
-    available: Boolean(formData.value.available),
+    nombre: formData.value.nombre,
+    categoria_id: categoria?.id || null,
+    descripcion: formData.value.descripcion || '',
+    precio: Number(formData.value.precio),
+    disponible: Boolean(formData.value.disponible),
     imageFile: imageFile.value
   }
 
@@ -162,9 +166,11 @@ const deleteItem = async (id) => {
 const toggleAvailability = async (item) => {
   try {
     await store.updateMenuItem(item.id, {
-      ...item,
-      available: !item.available,
-      price: item.price
+      nombre: item.nombre,
+      categoria_id: item.categoria_id,
+      descripcion: item.descripcion,
+      precio: item.precio,
+      disponible: !item.disponible
     })
   } catch (error) {
     console.error('Error actualizando platillo:', error)
@@ -173,6 +179,7 @@ const toggleAvailability = async (item) => {
 }
 
 onMounted(async () => {
+  await store.loadCategories()
   await store.loadMenuItems()
 })
 </script>
@@ -224,27 +231,27 @@ onMounted(async () => {
       <div
         v-for="item in filteredItems"
         :key="item.id"
-        :class="['menu-card', { 'menu-card-unavailable': !item.available }]"
+        :class="['menu-card', { 'menu-card-unavailable': !item.disponible }]"
       >
         <div class="menu-card-image">
-          <img v-if="item.imagen" :src="item.imagen" alt="Platillo" class="menu-card-image-inner" />
+          <img v-if="item.imagen_url" :src="item.imagen_url" alt="Platillo" class="menu-card-image-inner" />
           <span v-else class="material-symbols-outlined">restaurant</span>
         </div>
         
         <!-- Content -->
         <div class="menu-card-content">
           <div class="menu-card-header">
-            <h3 class="menu-card-title">{{ item.name }}</h3>
-            <span :class="['badge', item.available ? 'badge-success' : 'badge-danger']">
-              {{ item.available ? 'Disponible' : 'Agotado' }}
+            <h3 class="menu-card-title">{{ item.nombre }}</h3>
+            <span :class="['badge', item.disponible ? 'badge-success' : 'badge-danger']">
+              {{ item.disponible ? 'Disponible' : 'Agotado' }}
             </span>
           </div>
           
-          <p class="menu-card-description">{{ item.description }}</p>
+          <p class="menu-card-description">{{ item.descripcion }}</p>
           
           <div class="menu-card-footer">
-            <span class="menu-card-price">{{ formatCurrency(item.price) }}</span>
-            <span class="menu-card-category">{{ item.category }}</span>
+            <span class="menu-card-price">{{ formatCurrency(item.precio) }}</span>
+            <span class="menu-card-category">{{ item.categoria_nombre }}</span>
           </div>
         </div>
         
@@ -255,8 +262,8 @@ onMounted(async () => {
             Editar
           </button>
           <button @click="toggleAvailability(item)" class="btn btn-secondary btn-sm">
-            <span class="material-symbols-outlined">{{ item.available ? 'block' : 'check' }}</span>
-            {{ item.available ? 'Agotar' : 'Activar' }}
+            <span class="material-symbols-outlined">{{ item.disponible ? 'block' : 'check' }}</span>
+            {{ item.disponible ? 'Agotar' : 'Activar' }}
           </button>
           <button @click="deleteItem(item.id)" class="btn btn-danger btn-sm">
             <span class="material-symbols-outlined">delete</span>
@@ -288,25 +295,26 @@ onMounted(async () => {
           <form @submit.prevent="saveItem" class="modal-form">
             <div class="form-group">
               <label class="form-label">Nombre</label>
-              <input v-model="formData.name" type="text" class="input" placeholder="Nombre del platillo" required />
+              <input v-model="formData.nombre" type="text" class="input" placeholder="Nombre del platillo" required />
             </div>
             
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Categoria</label>
-                <select v-model="formData.category" class="input">
-                  <option v-for="cat in categories.slice(1)" :key="cat" :value="cat">{{ cat }}</option>
+                <select v-model="formData.categoria" class="input">
+                  <option value="">Sin categoria</option>
+                  <option v-for="cat in store.categories" :key="cat.id" :value="cat.nombre">{{ cat.nombre }}</option>
                 </select>
               </div>
               <div class="form-group">
                 <label class="form-label">Precio (Bs)</label>
-                <input v-model="formData.price" type="number" step="0.01" class="input" placeholder="0.00" required />
+                <input v-model="formData.precio" type="number" step="0.01" class="input" placeholder="0.00" required />
               </div>
             </div>
             
             <div class="form-group">
               <label class="form-label">Descripcion</label>
-              <textarea v-model="formData.description" class="input textarea" placeholder="Descripcion del platillo"></textarea>
+              <textarea v-model="formData.descripcion" class="input textarea" placeholder="Descripcion del platillo"></textarea>
             </div>
 
             <div class="form-group">
@@ -321,8 +329,8 @@ onMounted(async () => {
             </div>
             
             <div class="form-checkbox">
-              <input v-model="formData.available" type="checkbox" id="available" />
-              <label for="available">Disponible</label>
+              <input v-model="formData.disponible" type="checkbox" id="disponible" />
+              <label for="disponible">Disponible</label>
             </div>
             
             <div class="modal-actions">

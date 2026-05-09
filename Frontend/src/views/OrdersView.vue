@@ -12,22 +12,22 @@ const userRole = computed(() => authStore.user?.rol || '')
 const selectedStatus = ref('all')
 const showOrderModal = ref(false)
 const showNewCustomerForm = ref(false)
-const paymentMethods = ['efectivo', 'tarjeta', 'transferencia', 'voucher']
+const paymentMethods = ['efectivo', 'tarjeta', 'qr', 'transferencia']
 
 const orderForm = ref({
-  table: null,
-  customer: null,
-  waiter: '',
-  propina: 0,
-  metodo_pago: 'efectivo',
+  mesa_id: null,
+  cliente_id: null,
+  reserva_id: null,
+  mesero_id: authStore.user?.id || null,
+  observaciones: '',
   items: [
-    { plato_id: null, qty: 1, price: 0, notes: '' }
+    { producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' }
   ]
 })
 
 const newCustomerForm = ref({
-  name: '',
-  phone: '',
+  nombre: '',
+  telefono: '',
   email: ''
 })
 
@@ -45,7 +45,12 @@ const filteredOrders = computed(() => {
 })
 
 const orderSubtotal = computed(() => {
-  return orderForm.value.items.reduce((sum, item) => sum + (Number(item.price) * Number(item.qty)), 0)
+  return orderForm.value.items.reduce((sum, item) => {
+    if (item.producto_id && item.cantidad) {
+      return sum + (Number(item.precio_unitario) * Number(item.cantidad))
+    }
+    return sum
+  }, 0)
 })
 
 const orderTax = computed(() => {
@@ -53,7 +58,7 @@ const orderTax = computed(() => {
 })
 
 const orderTotal = computed(() => {
-  return parseFloat((orderSubtotal.value + orderTax.value + Number(orderForm.value.propina)).toFixed(2))
+  return parseFloat((orderSubtotal.value + orderTax.value).toFixed(2))
 })
 
 const getStatusLabel = (status) => {
@@ -66,14 +71,15 @@ const formatCurrency = (value) => {
 }
 
 const menuOptions = computed(() =>
-  store.menuItems.filter(m => m.available).map(m => ({
+  store.menuItems.filter(m => m.disponible).map(m => ({
     id: m.id,
-    name: `${m.name} (Bs ${m.price.toFixed(2)})`
+    name: `${m.nombre} (Bs ${Number(m.precio).toFixed(2)})`,
+    price: Number(m.precio)
   }))
 )
 
 const addItemRow = () => {
-  orderForm.value.items.push({ plato_id: null, qty: 1, price: 0, notes: '' })
+  orderForm.value.items.push({ producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' })
 }
 
 const removeItemRow = (idx) => {
@@ -83,20 +89,20 @@ const removeItemRow = (idx) => {
 }
 
 const updateItemPrice = (idx) => {
-  const selected = store.menuItems.find(m => m.id === orderForm.value.items[idx].plato_id)
+  const selected = store.menuItems.find(m => m.id === orderForm.value.items[idx].producto_id)
   if (selected) {
-    orderForm.value.items[idx].price = selected.price
+    orderForm.value.items[idx].precio_unitario = Number(selected.precio)
   }
 }
 
-const canCreateOrder = computed(() => ['admin', 'camarero'].includes(userRole.value))
+const canCreateOrder = computed(() => ['admin', 'mesero', 'cajero'].includes(userRole.value))
 
 const canUpdateTo = (orderStatus) => {
   if (userRole.value === 'admin') return true
   if (userRole.value === 'cocina') {
     return orderStatus === 'pending' || orderStatus === 'preparing'
   }
-  if (userRole.value === 'camarero') {
+  if (userRole.value === 'mesero') {
     return orderStatus === 'ready'
   }
   return false
@@ -125,12 +131,12 @@ const ordersByStatus = computed(() => ({
 const openAddModal = () => {
   if (!canCreateOrder.value) return
   orderForm.value = {
-    table: null,
-    customer: null,
-    waiter: authStore.user ? `${authStore.user.nombre} ${authStore.user.apellido}` : '',
-    propina: 0,
-    metodo_pago: 'efectivo',
-    items: [{ plato_id: null, qty: 1, price: 0, notes: '' }]
+    mesa_id: null,
+    cliente_id: null,
+    reserva_id: null,
+    mesero_id: authStore.user?.id || null,
+    observaciones: '',
+    items: [{ producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' }]
   }
   showNewCustomerForm.value = false
   showOrderModal.value = true
@@ -141,49 +147,71 @@ const closeOrderModal = () => {
   showNewCustomerForm.value = false
 }
 
-const addItem = () => {
-  orderForm.value.items.push({ plato_id: null, qty: 1, price: 0, notes: '' })
-}
-
-const removeItem = (idx) => {
-  if (orderForm.value.items.length > 1) {
-    orderForm.value.items.splice(idx, 1)
-  }
-}
-
 const onItemMenuChange = (idx) => {
-  const selected = store.menuItems.find(m => m.id === orderForm.value.items[idx].plato_id)
+  const selected = store.menuItems.find(m => m.id === orderForm.value.items[idx].producto_id)
   if (selected) {
-    orderForm.value.items[idx].price = selected.price
+    orderForm.value.items[idx].precio_unitario = Number(selected.precio)
   }
 }
 
-const createOrder = async () => {
-  const validItems = orderForm.value.items.filter(i => i.plato_id)
-  if (!validItems.length) return
-
-  await store.createOrder({
-    mesa_id: orderForm.value.table,
-    usuario_id: authStore.user?.id,
-    items: validItems,
-    propina: Number(orderForm.value.propina),
-    metodo_pago: orderForm.value.metodo_pago,
-    customer: orderForm.value.customer
-  })
-
-  if (showNewCustomerForm.value && newCustomerForm.value.name) {
-    await store.createCustomer({
-      nombre: newCustomerForm.value.name,
-      telefono: newCustomerForm.value.phone,
-      correo: newCustomerForm.value.email || null
-    })
+const createNewCustomer = async () => {
+  if (!newCustomerForm.value.nombre || !newCustomerForm.value.telefono) {
+    alert('Nombre y telefono son obligatorios')
+    return
   }
 
-  closeOrderModal()
+  try {
+    const result = await store.createCustomer({
+      nombre: newCustomerForm.value.nombre,
+      telefono: newCustomerForm.value.telefono,
+      email: newCustomerForm.value.email || null
+    })
+    
+    if (result && result.id) {
+      orderForm.value.cliente_id = result.id
+      showNewCustomerForm.value = false
+      newCustomerForm.value = { nombre: '', telefono: '', email: '' }
+    }
+  } catch (error) {
+    alert('Error al crear cliente')
+  }
+}
+
+const saveOrder = async () => {
+  const validItems = orderForm.value.items
+    .filter((item) => item.producto_id && item.cantidad > 0)
+    .map((item) => ({
+      producto_id: Number(item.producto_id),
+      cantidad: Number(item.cantidad),
+      precio_unitario: Number(item.precio_unitario),
+      observaciones: item.observaciones || null
+    }))
+
+  if (!orderForm.value.mesa_id || validItems.length === 0) {
+    alert('Mesa y al menos un producto son obligatorios')
+    return
+  }
+
+  try {
+    const payload = {
+      mesa_id: Number(orderForm.value.mesa_id),
+      cliente_id: orderForm.value.cliente_id || null,
+      reserva_id: orderForm.value.reserva_id || null,
+      mesero_id: orderForm.value.mesero_id,
+      observaciones: orderForm.value.observaciones || null,
+      items: validItems
+    }
+
+    await store.createOrder(payload)
+    await store.loadOrders()
+    await store.loadTables()
+    closeOrderModal()
+  } catch (error) {
+    alert('Error al crear pedido: ' + (error.message || 'Error desconocido'))
+  }
 }
 
 const updateStatus = async (orderId, newStatus) => {
-  if (!canUpdateTo(store.orders.find(o => o.id === orderId)?.status)) return
   try {
     await store.updateOrderStatus(orderId, newStatus)
   } catch (error) {
@@ -193,89 +221,6 @@ const updateStatus = async (orderId, newStatus) => {
 }
 
 const canSeeWaiterInfo = computed(() => userRole.value !== 'cocina')
-
-const canSeeCustomerSection = computed(() => userRole.value === 'cocina')
-
-onMounted(async () => {
-  await store.loadOrders()
-  await store.loadMenuItems()
-  await store.loadTables()
-  await store.loadCustomers()
-})
-
-const createNewCustomer = async () => {
-  if (!newCustomerForm.value.name || !newCustomerForm.value.phone) {
-    alert('Nombre y teléfono son obligatorios')
-    return
-  }
-
-  try {
-    const result = await store.createCustomer({
-      name: newCustomerForm.value.name,
-      phone: newCustomerForm.value.phone,
-      email: newCustomerForm.value.email || null
-    })
-    
-    if (result && result.insertId) {
-      orderForm.value.customer = result.insertId
-      showNewCustomerForm.value = false
-      newCustomerForm.value = { name: '', phone: '', email: '' }
-    }
-  } catch (error) {
-    alert('Error al crear cliente')
-  }
-}
-
-const saveOrder = async () => {
-  const validItems = orderForm.value.items
-    .filter((item) => item.plato_id && item.qty > 0)
-    .map((item) => ({
-      plato_id: Number(item.plato_id),
-      qty: Number(item.qty),
-      price: Number(item.price),
-      notes: item.notes || null
-    }))
-
-  if (!orderForm.value.table || validItems.length === 0) {
-    alert('Mesa y items son obligatorios')
-    return
-  }
-
-  try {
-    const payload = {
-      mesa_id: Number(orderForm.value.table),
-      usuario_id: null,
-      propina: Number(orderForm.value.propina || 0),
-      items: validItems
-    }
-
-    const orderData = await apiFetch('http://localhost:3000/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-    const orderId = orderData.id
-
-    // Procesar pago automatico
-    if (orderId && orderTotal.value > 0) {
-      try {
-        await store.createPayment({
-          pedido_id: orderId,
-          monto: orderTotal.value,
-          metodo: orderForm.value.metodo_pago,
-          referencia: null
-        })
-      } catch (paymentError) {
-        console.error('Error al procesar pago:', paymentError)
-      }
-    }
-
-    await store.loadOrders()
-    closeOrderModal()
-  } catch (error) {
-    alert('Error al crear pedido: ' + error.message)
-  }
-}
 
 onMounted(async () => {
   await store.loadOrders()
@@ -340,9 +285,9 @@ onMounted(async () => {
             <!-- Order Header -->
             <div class="order-header">
               <div class="order-info">
-                <div class="order-table-badge">{{ order.table }}</div>
+                <div class="order-table-badge">{{ order.mesa_numero || order.mesa_id }}</div>
                 <div>
-                  <p class="order-title">Mesa {{ order.table }}</p>
+                  <p class="order-title">Mesa {{ order.mesa_numero || order.mesa_id }}</p>
                   <p class="order-id">#{{ order.id }}</p>
                 </div>
               </div>
@@ -356,8 +301,8 @@ onMounted(async () => {
                 :key="idx"
                 class="order-item"
               >
-                <span class="item-name">{{ item.qty }}x {{ item.name }}</span>
-                <span class="item-price">{{ formatCurrency(item.qty * item.price) }}</span>
+                <span class="item-name">{{ item.cantidad }}x {{ item.nombre }}</span>
+                <span class="item-price">{{ formatCurrency(item.cantidad * item.precio_unitario) }}</span>
               </div>
             </div>
             
@@ -381,9 +326,9 @@ onMounted(async () => {
             </div>
             
             <!-- Waiter Info -->
-            <div v-if="canSeeWaiterInfo" class="order-waiter">
+            <div v-if="canSeeWaiterInfo && order.mesero_nombre" class="order-waiter">
               <span class="material-symbols-outlined">person</span>
-              {{ order.waiter }}
+              {{ order.mesero_nombre }}
             </div>
           </div>
           
@@ -431,21 +376,21 @@ onMounted(async () => {
               <td class="cell-bold">#{{ order.id }}</td>
               <td>
                 <div class="cell-table">
-                  <div class="mini-badge">{{ order.table }}</div>
-                  Mesa {{ order.table }}
+                  <div class="mini-badge">{{ order.mesa_numero || order.mesa_id }}</div>
+                  Mesa {{ order.mesa_numero || order.mesa_id }}
                 </div>
               </td>
               <td>
                 <div class="cell-items">
                   <span v-for="(item, idx) in order.items.slice(0, 2)" :key="idx">
-                    {{ item.qty }}x {{ item.name }}
+                    {{ item.cantidad }}x {{ item.nombre }}
                   </span>
                   <span v-if="order.items.length > 2" class="items-more">
                     +{{ order.items.length - 2 }} mas...
                   </span>
                 </div>
               </td>
-              <td class="cell-muted">{{ order.waiter }}</td>
+              <td class="cell-muted">{{ order.mesero_nombre || '-' }}</td>
               <td class="cell-muted">{{ order.time }}</td>
               <td class="cell-bold">{{ formatCurrency(order.total) }}</td>
               <td>
@@ -454,7 +399,7 @@ onMounted(async () => {
                 </span>
               </td>
               <td>
-                <button 
+                <button
                   v-if="getNextStatus(order.status) && canUpdateTo(order.status)"
                   @click="updateStatus(order.id, getNextStatus(order.status))"
                   class="btn btn-primary btn-sm"
@@ -484,25 +429,25 @@ onMounted(async () => {
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Mesa</label>
-                <select v-model="orderForm.table" class="input" required>
+                <select v-model="orderForm.mesa_id" class="input" required>
                   <option value="" disabled>Selecciona una mesa</option>
                   <option v-for="table in store.tables" :key="table.id" :value="table.id">
-                    {{ table.number }}
+                    Mesa {{ table.numero }}
                   </option>
                 </select>
               </div>
               <div class="form-group">
                 <label class="form-label">Cliente</label>
                 <div class="customer-selector">
-                  <select v-if="!showNewCustomerForm" v-model="orderForm.customer" class="input">
+                  <select v-if="!showNewCustomerForm" v-model="orderForm.cliente_id" class="input">
                     <option value="">Sin cliente</option>
                     <option v-for="customer in store.customers" :key="customer.id" :value="customer.id">
-                      {{ customer.name }} ({{ customer.phone }})
+                      {{ customer.nombre }} ({{ customer.telefono }})
                     </option>
                   </select>
                   <div v-else class="new-customer-form">
-                    <input v-model="newCustomerForm.name" type="text" class="input" placeholder="Nombre" />
-                    <input v-model="newCustomerForm.phone" type="text" class="input" placeholder="Teléfono" />
+                    <input v-model="newCustomerForm.nombre" type="text" class="input" placeholder="Nombre" />
+                    <input v-model="newCustomerForm.telefono" type="text" class="input" placeholder="Telefono" />
                     <input v-model="newCustomerForm.email" type="email" class="input" placeholder="Email (opcional)" />
                     <button type="button" @click="createNewCustomer" class="btn btn-primary btn-sm">Crear</button>
                     <button type="button" @click="showNewCustomerForm = false" class="btn btn-secondary btn-sm">Cancelar</button>
@@ -512,46 +457,32 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Mesero</label>
-                <input v-model="orderForm.waiter" type="text" class="input" placeholder="Nombre del mesero" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Método de Pago</label>
-                <select v-model="orderForm.metodo_pago" class="input">
-                  <option v-for="method in paymentMethods" :key="method" :value="method">
-                    {{ method.charAt(0).toUpperCase() + method.slice(1) }}
-                  </option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Propina</label>
-                <input v-model="orderForm.propina" type="number" min="0" step="0.01" class="input" />
-              </div>
+            <div class="form-group">
+              <label class="form-label">Observaciones</label>
+              <input v-model="orderForm.observaciones" type="text" class="input" placeholder="Notas especiales..." />
             </div>
 
             <div class="form-group">
               <label class="form-label">Items</label>
               <div class="order-items-form">
                 <div class="order-item-row order-item-header">
-                  <span>Platillo</span>
+                  <span>Producto</span>
                   <span>Cantidad</span>
                   <span>Precio</span>
                   <span>Notas</span>
                   <span></span>
                 </div>
                 <div v-for="(item, index) in orderForm.items" :key="index" class="order-item-row">
-                  <select v-model="item.plato_id" @change="updateItemPrice(index)" class="input">
-                    <option value="" disabled>Selecciona un platillo</option>
+                  <select v-model="item.producto_id" @change="updateItemPrice(index)" class="input">
+                    <option value="" disabled>Selecciona un producto</option>
                     <option v-for="menuItem in menuOptions" :key="menuItem.id" :value="menuItem.id">
                       {{ menuItem.name }}
                     </option>
                   </select>
-                  <input v-model="item.qty" type="number" min="1" class="input item-input" placeholder="Cant." />
-                  <input v-model="item.price" type="number" min="0" step="0.01" class="input item-input" placeholder="Precio" />
-                  <input v-model="item.notes" type="text" class="input item-input" placeholder="Notas" />
-                  <button type="button" @click="removeItemRow(index)" class="btn btn-secondary btn-sm">Eliminar</button>
+                  <input v-model="item.cantidad" type="number" min="1" class="input item-input" placeholder="Cant." />
+                  <input v-model="item.precio_unitario" type="number" min="0" step="0.01" class="input item-input" placeholder="Precio" />
+                  <input v-model="item.observaciones" type="text" class="input item-input" placeholder="Notas" />
+                  <button type="button" @click="removeItemRow(index)" class="btn btn-secondary btn-sm">X</button>
                 </div>
               </div>
               <button type="button" @click="addItemRow" class="btn btn-primary btn-sm">Agregar item</button>
@@ -566,10 +497,6 @@ onMounted(async () => {
               <div class="summary-row">
                 <span>Impuesto (13%):</span>
                 <span>{{ formatCurrency(orderTax) }}</span>
-              </div>
-              <div class="summary-row">
-                <span>Propina:</span>
-                <span>{{ formatCurrency(Number(orderForm.propina)) }}</span>
               </div>
               <div class="summary-row summary-total">
                 <span>TOTAL:</span>
@@ -595,7 +522,6 @@ onMounted(async () => {
   gap: 1.5rem;
 }
 
-/* Page Header */
 .page-header {
   display: flex;
   flex-direction: column;
@@ -622,7 +548,6 @@ onMounted(async () => {
   color: var(--on-surface-variant);
 }
 
-/* Status Summary */
 .status-summary {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -680,7 +605,6 @@ onMounted(async () => {
 .summary-dot-ready { background: var(--success); }
 .summary-dot-delivered { background: var(--outline); }
 
-/* Kanban Grid */
 .kanban-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -725,7 +649,6 @@ onMounted(async () => {
   overflow-y: auto;
 }
 
-/* Order Card */
 .order-card {
   background: var(--surface-container);
   border: 1px solid var(--outline-variant);
@@ -842,7 +765,6 @@ onMounted(async () => {
   font-size: 0.875rem;
 }
 
-/* Kanban Empty */
 .kanban-empty {
   text-align: center;
   padding: 2rem;
@@ -859,7 +781,6 @@ onMounted(async () => {
   color: var(--on-surface-variant);
 }
 
-/* Table Card */
 .table-card {
   display: none;
 }
@@ -908,7 +829,6 @@ onMounted(async () => {
   color: white;
 }
 
-/* Data Table */
 .table-container {
   overflow-x: auto;
 }
@@ -984,7 +904,6 @@ onMounted(async () => {
   color: var(--success);
 }
 
-/* Badges */
 .badge {
   display: inline-flex;
   padding: 0.25rem 0.5rem;
@@ -1015,7 +934,6 @@ onMounted(async () => {
   color: var(--outline);
 }
 
-/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1050,7 +968,12 @@ onMounted(async () => {
   font-size: 0.625rem;
 }
 
-/* Card */
+.btn-secondary {
+  background: var(--surface-container);
+  color: var(--on-surface);
+  border: 1px solid var(--outline-variant);
+}
+
 .card {
   background: var(--surface-container-lowest);
   border: 1px solid var(--outline-variant);
@@ -1058,7 +981,6 @@ onMounted(async () => {
   padding: 1.5rem;
 }
 
-/* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;

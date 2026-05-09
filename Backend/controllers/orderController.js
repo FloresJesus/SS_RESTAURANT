@@ -1,162 +1,358 @@
+const db = require("../config/db")
 const {
   getOrders,
-  getOrderItems,
+  getOrderDetails,
+  getOrdersWithDetails,
+  findOrderById,
   createOrder,
   createOrderDetail,
-  updateOrderStatus,
-  findOrderById,
+  updateOrderDetail,
+  deleteOrderDetail,
+  updateOrderServiceStatus,
+  updateOrderPaymentStatus,
+  updateOrder,
+  getOrdersByDate,
+  getOrdersByStatus,
+  getOrderTotal,
+  getDailySales,
   getWeeklySales,
-  getSalesByCategory,
-  getTodaySales
+  getTopSellingProducts,
+  getSalesByCategory
 } = require("../models/orderModels")
+const { updateTableStatus, findTableById } = require("../models/tableModels")
 
-const mapKitchenStatus = (estado_cocina) => {
+const mapServiceStatus = (estado_servicio) => {
   const map = {
-    abierto: "pending",
-    cocina: "preparing",
+    pendiente: "pending",
+    preparando: "preparing",
     listo: "ready",
-    servido: "delivered"
+    entregado: "delivered",
+    cancelado: "cancelled"
   }
-  return map[estado_cocina] || "pending"
+  return map[estado_servicio] || "pending"
+}
+
+const reverseMapServiceStatus = (status) => {
+  const map = {
+    pending: "pendiente",
+    preparing: "preparando",
+    ready: "listo",
+    delivered: "entregado",
+    cancelled: "cancelado"
+  }
+  return map[status] || status
 }
 
 const getAllOrders = async (req, res) => {
   try {
-    const orders = await getOrders()
-    const orderIds = orders.map((order) => order.id)
-    const orderItems = await getOrderItems(orderIds)
-    const groupedItems = orderItems.reduce((acc, item) => {
-      if (!acc[item.pedido_id]) acc[item.pedido_id] = []
-      acc[item.pedido_id].push({
-        name: item.plato_nombre,
-        qty: item.cantidad,
-        price: Number(item.precio_momento),
-        notes: item.notas
-      })
-      return acc
-    }, {})
-
+    const orders = await getOrdersWithDetails()
     const mapped = orders.map((order) => ({
       id: order.id,
-      table: order.mesa_nombre || order.mesa_id,
-      waiter: order.mesero_nombre ? `${order.mesero_nombre} ${order.mesero_apellido || ""}`.trim() : "Sin asignar",
-      time: order.time,
-      status: mapKitchenStatus(order.estado_cocina),
-      subtotal: Number(order.subtotal),
-      impuesto: Number(order.impuesto),
-      propina: Number(order.propina),
-      total: Number(order.total),
-      paymentStatus: order.estado_pago,
-      items: groupedItems[order.id] || []
+      mesa_id: order.mesa_id,
+      mesa_numero: order.mesa_numero,
+      cliente_id: order.cliente_id,
+      cliente_nombre: order.cliente_nombre,
+      reserva_id: order.reserva_id,
+      mesero_id: order.mesero_id,
+      mesero_nombre: order.mesero_nombre ? `${order.mesero_nombre} ${order.mesero_apellido || ""}`.trim() : null,
+      estado_servicio: order.estado_servicio,
+      estado_pago: order.estado_pago,
+      observaciones: order.observaciones,
+      subtotal: order.subtotal,
+      impuesto: parseFloat((order.subtotal * 0.13).toFixed(2)),
+      total: parseFloat((order.subtotal * 1.13).toFixed(2)),
+      time: new Date(order.creado_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      creado_en: order.creado_en,
+      status: mapServiceStatus(order.estado_servicio),
+      items: order.detalles.map((d) => ({
+        id: d.id,
+        producto_id: d.producto_id,
+        nombre: d.producto_nombre,
+        cantidad: d.cantidad,
+        precio_unitario: Number(d.precio_unitario),
+        subtotal: Number(d.subtotal),
+        estado: d.estado,
+        observaciones: d.observaciones
+      }))
     }))
 
     res.json(mapped)
   } catch (error) {
-    console.error(error)
+    console.error("Error al recuperar los pedidos:", error)
     res.status(500).json({ message: "Error al recuperar los pedidos" })
   }
 }
 
-const createNewOrder = async (req, res) => {
-  const { mesa_id, usuario_id = null, items, propina = 0 } = req.body
-
-  if (!mesa_id || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ message: "Mesa y items son obligatorios" })
-  }
+const getOrderById = async (req, res) => {
+  const { id } = req.params
 
   try {
-    const subtotal = items.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0)
-    const parsedPropina = Number(propina) || 0
-    const impuesto = parseFloat((subtotal * 0.13).toFixed(2))
-    const total = parseFloat((subtotal + impuesto + parsedPropina).toFixed(2))
-    const orderId = await createOrder(mesa_id, usuario_id, subtotal, impuesto, parsedPropina, total)
-
-    for (const item of items) {
-      await createOrderDetail(orderId, item.plato_id, item.qty, item.price, item.notes || null)
+    const order = await findOrderById(id)
+    if (!order) {
+      return res.status(404).json({ message: "Pedido no encontrado" })
     }
 
-    res.status(201).json({ id: orderId, message: "Pedido creado correctamente" })
+    const details = await getOrderDetails(id)
+    const subtotal = details.reduce((sum, d) => sum + parseFloat(d.subtotal), 0)
+
+    res.json({
+      ...order,
+      subtotal,
+      impuesto: parseFloat((subtotal * 0.13).toFixed(2)),
+      total: parseFloat((subtotal * 1.13).toFixed(2)),
+      status: mapServiceStatus(order.estado_servicio),
+      items: details.map((d) => ({
+        id: d.id,
+        producto_id: d.producto_id,
+        nombre: d.producto_nombre,
+        cantidad: d.cantidad,
+        precio_unitario: Number(d.precio_unitario),
+        subtotal: Number(d.subtotal),
+        estado: d.estado,
+        observaciones: d.observaciones
+      }))
+    })
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ message: "Error al crear el pedido" })
+    console.error("Error al recuperar el pedido:", error)
+    res.status(500).json({ message: "Error al recuperar el pedido" })
   }
 }
 
-const updateExistingOrderStatus = async (req, res) => {
+const createNewOrder = async (req, res) => {
+  const { mesa_id, cliente_id = null, reserva_id = null, mesero_id, items = [], observaciones = null } = req.body
+
+  if (!mesa_id || !mesero_id) {
+    return res.status(400).json({ message: "Mesa y mesero son obligatorios" })
+  }
+
+  if (!items || items.length === 0) {
+    return res.status(400).json({ message: "Al menos un producto es obligatorio" })
+  }
+
+  const connection = await db.getConnection()
+
+  try {
+    await connection.beginTransaction()
+
+    const [tableData] = await connection.query(
+      `SELECT id, estado FROM mesa WHERE id = ?`,
+      [mesa_id]
+    )
+    if (!tableData[0]) {
+      throw new Error("Mesa no encontrada")
+    }
+
+    const [result] = await connection.query(
+      `INSERT INTO pedido (cliente_id, reserva_id, mesa_id, mesero_id, observaciones)
+       VALUES (?, ?, ?, ?, ?)`,
+      [cliente_id, reserva_id, mesa_id, mesero_id, observaciones]
+    )
+    const orderId = result.insertId
+
+    for (const item of items) {
+      if (!item.producto_id || !item.cantidad) continue
+
+      const [productData] = await connection.query(
+        `SELECT precio FROM producto WHERE id = ?`,
+        [item.producto_id]
+      )
+      if (!productData[0]) continue
+
+      const precioUnitario = item.precio_unitario || productData[0].precio
+      const subtotal = item.cantidad * precioUnitario
+
+      await connection.query(
+        `INSERT INTO detalle_pedido (pedido_id, producto_id, cantidad, precio_unitario, subtotal, observaciones)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [orderId, item.producto_id, item.cantidad, precioUnitario, subtotal, item.observaciones || null]
+      )
+    }
+
+    await connection.query(
+      `UPDATE mesa SET estado = 'ocupada' WHERE id = ?`,
+      [mesa_id]
+    )
+
+    await connection.commit()
+
+    res.status(201).json({
+      id: orderId,
+      message: "Pedido creado correctamente"
+    })
+  } catch (error) {
+    await connection.rollback()
+    console.error("Error al crear el pedido:", error)
+    res.status(500).json({ message: "Error al crear el pedido" })
+  } finally {
+    connection.release()
+  }
+}
+
+const updateOrderItems = async (req, res) => {
+  const { id } = req.params
+  const { items = [] } = req.body
+
+  if (!items || items.length === 0) {
+    return res.status(400).json({ message: "Al menos un producto es obligatorio" })
+  }
+
+  const connection = await db.getConnection()
+
+  try {
+    await connection.beginTransaction()
+
+    const [orderData] = await connection.query(
+      `SELECT id FROM pedido WHERE id = ?`,
+      [id]
+    )
+    if (!orderData[0]) {
+      throw new Error("Pedido no encontrado")
+    }
+
+    for (const item of items) {
+      if (!item.producto_id || !item.cantidad) continue
+
+      if (item.id) {
+        const [currentDetail] = await connection.query(
+          `SELECT precio_unitario FROM detalle_pedido WHERE id = ? AND pedido_id = ?`,
+          [item.id, id]
+        )
+        if (currentDetail[0]) {
+          const subtotal = item.cantidad * currentDetail[0].precio_unitario
+          await connection.query(
+            `UPDATE detalle_pedido SET cantidad = ?, subtotal = ? WHERE id = ?`,
+            [item.cantidad, subtotal, item.id]
+          )
+        }
+      } else {
+        const [productData] = await connection.query(
+          `SELECT precio FROM producto WHERE id = ?`,
+          [item.producto_id]
+        )
+        if (productData[0]) {
+          const precioUnitario = item.precio_unitario || productData[0].precio
+          const subtotal = item.cantidad * precioUnitario
+          await connection.query(
+            `INSERT INTO detalle_pedido (pedido_id, producto_id, cantidad, precio_unitario, subtotal, observaciones)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [id, item.producto_id, item.cantidad, precioUnitario, subtotal, item.observaciones || null]
+          )
+        }
+      }
+    }
+
+    await connection.commit()
+    res.json({ message: "Items del pedido actualizados correctamente" })
+  } catch (error) {
+    await connection.rollback()
+    console.error("Error al actualizar items del pedido:", error)
+    res.status(500).json({ message: "Error al actualizar items del pedido" })
+  } finally {
+    connection.release()
+  }
+}
+
+const deleteOrderItem = async (req, res) => {
+  const { id, itemId } = req.params
+
+  try {
+    const result = await deleteOrderDetail(itemId)
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Item no encontrado" })
+    }
+    res.json({ message: "Item eliminado del pedido correctamente" })
+  } catch (error) {
+    console.error("Error al eliminar item del pedido:", error)
+    res.status(500).json({ message: "Error al eliminar item del pedido" })
+  }
+}
+
+const updateOrderStatus = async (req, res) => {
   const { id } = req.params
   const { status } = req.body
 
   if (!status) {
-    return res.status(400).json({ message: "Estado de pedido es obligatorio" })
+    return res.status(400).json({ message: "Estado es obligatorio" })
   }
 
-  const statusMap = {
-    pending: "abierto",
-    preparing: "cocina",
-    ready: "listo",
-    delivered: "servido"
-  }
+  const estado_servicio = reverseMapServiceStatus(status)
 
-  const estado_cocina = statusMap[status] || status
+  const connection = await db.getConnection()
 
   try {
-    const existing = await findOrderById(id)
-    if (!existing) {
-      return res.status(404).json({ message: "Pedido no encontrado" })
+    await connection.beginTransaction()
+
+    const [orderData] = await connection.query(
+      `SELECT id, mesa_id, estado_servicio FROM pedido WHERE id = ?`,
+      [id]
+    )
+    if (!orderData[0]) {
+      throw new Error("Pedido no encontrado")
     }
 
-    await updateOrderStatus(id, estado_cocina)
+    await connection.query(
+      `UPDATE pedido SET estado_servicio = ? WHERE id = ?`,
+      [estado_servicio, id]
+    )
+
+    if (estado_servicio === 'cancelado' || estado_servicio === 'entregado') {
+      await connection.query(
+        `UPDATE mesa SET estado = 'libre' WHERE id = ?`,
+        [orderData[0].mesa_id]
+      )
+    }
+
+    await connection.commit()
     res.json({ message: "Estado del pedido actualizado" })
   } catch (error) {
-    console.error(error)
-    res.status(500).json({ message: "Error al actualizar el pedido" })
+    await connection.rollback()
+    console.error("Error al actualizar el estado del pedido:", error)
+    res.status(500).json({ message: "Error al actualizar el estado del pedido" })
+  } finally {
+    connection.release()
   }
 }
 
 const getSalesStats = async (req, res) => {
   try {
     const weeklyRows = await getWeeklySales()
-    const categoryRows = await getSalesByCategory()
-    const today = await getTodaySales()
+    const topProducts = await getTopSellingProducts(5)
+    const todayData = await getDailySales()
 
     const dayNames = { Monday: 'Lun', Tuesday: 'Mar', Wednesday: 'Mié', Thursday: 'Jue', Friday: 'Vie', Saturday: 'Sáb', Sunday: 'Dom' }
     const dayOrder = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
     const weekly = dayOrder.map(day => {
       const found = weeklyRows.find(r => dayNames[r.dia_nombre] === day)
-      return { day, sales: found ? Number(found.total_ventas) : 0 }
+      return { day, sales: found ? parseFloat(found.total_ventas) : 0 }
     })
 
-    const categories = categoryRows.map(r => ({
-      name: r.categoria,
-      value: Number(r.total_ventas)
+    const products = topProducts.map(p => ({
+      name: p.nombre,
+      quantity: Number(p.cantidad_vendida),
+      value: parseFloat(p.total_ventas)
     }))
-
-    const categoryNames = ['Platos', 'Bebidas', 'Postres', 'Entradas']
-    categoryNames.forEach(name => {
-      if (!categories.find(c => c.name === name)) {
-        categories.push({ name, value: 0 })
-      }
-    })
 
     res.json({
       weekly,
-      categories: categories.slice(0, 4),
+      topProducts: products,
       today: {
-        orders: Number(today.cantidad_pedidos),
-        sales: Number(today.total_ventas),
-        avgTicket: Number(today.ticket_promedio)
+        orders: Number(todayData.cantidad_pedidos),
+        sales: parseFloat(todayData.subtotal_ventas)
       }
     })
   } catch (error) {
-    console.error(error)
+    console.error("Error al obtener estadisticas:", error)
     res.status(500).json({ message: "Error al obtener estadisticas" })
   }
 }
 
 module.exports = {
   getAllOrders,
+  getOrderById,
   createNewOrder,
-  updateExistingOrderStatus,
+  updateOrderItems,
+  deleteOrderItem,
+  updateOrderStatus,
   getSalesStats
 }

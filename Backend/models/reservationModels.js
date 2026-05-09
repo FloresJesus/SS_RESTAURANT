@@ -2,99 +2,131 @@ const db = require("../config/db")
 
 const showReservations = async () => {
   const [rows] = await db.query(
-    `SELECT
-      r.id,
-      r.cliente_id,
-      c.nombre AS nombre,
-      c.telefono AS telefono,
-      c.correo AS correo,
-      r.mesa_id,
-      m.nombre AS mesa_nombre,
-      r.fecha,
-      r.hora,
-      r.personas,
-      r.estado,
-      r.notas,
-      r.creado_en
-    FROM reservacion r
-    JOIN cliente c ON r.cliente_id = c.id
-    LEFT JOIN mesa m ON r.mesa_id = m.id
-    ORDER BY r.fecha DESC, r.hora DESC`
+    `SELECT r.id, r.cliente_id, r.mesa_id, r.cantidad_personas,
+            r.fecha_reserva, r.hora_reserva, r.estado, r.observaciones, r.creado_en,
+            c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.email AS cliente_email,
+            m.numero AS mesa_numero
+     FROM reserva r
+     LEFT JOIN cliente c ON r.cliente_id = c.id
+     LEFT JOIN mesa m ON r.mesa_id = m.id
+     ORDER BY r.fecha_reserva DESC, r.hora_reserva DESC`
   )
   return rows
 }
 
 const findReservationById = async (id) => {
   const [rows] = await db.query(
-    `SELECT * FROM reservacion WHERE id = ?`,
+    `SELECT r.id, r.cliente_id, r.mesa_id, r.cantidad_personas,
+            r.fecha_reserva, r.hora_reserva, r.estado, r.observaciones, r.creado_en,
+            c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.email AS cliente_email,
+            m.numero AS mesa_numero
+     FROM reserva r
+     LEFT JOIN cliente c ON r.cliente_id = c.id
+     LEFT JOIN mesa m ON r.mesa_id = m.id
+     WHERE r.id = ?`,
     [id]
   )
   return rows[0]
 }
 
-const createCustomer = async (nombre, telefono, correo = null) => {
-  const [result] = await db.query(
-    `INSERT INTO cliente (nombre, telefono, correo) VALUES (?, ?, ?)`,
-    [nombre, telefono, correo]
+const findReservationByClientId = async (cliente_id) => {
+  const [rows] = await db.query(
+    `SELECT r.id, r.cliente_id, r.mesa_id, r.cantidad_personas,
+            r.fecha_reserva, r.hora_reserva, r.estado, r.observaciones, r.creado_en,
+            m.numero AS mesa_numero
+     FROM reserva r
+     LEFT JOIN mesa m ON r.mesa_id = m.id
+     WHERE r.cliente_id = ?
+     ORDER BY r.fecha_reserva DESC`,
+    [cliente_id]
   )
-  return result.insertId
+  return rows
 }
 
-const createReservation = async (
-  cliente_id,
-  mesa_id,
-  fecha,
-  hora,
-  personas,
-  estado = "pendiente",
-  notas = null
-) => {
+const createReservation = async (cliente_id, mesa_id, cantidad_personas, fecha_reserva, hora_reserva, estado = 'pendiente', observaciones = null) => {
   const [result] = await db.query(
-    `INSERT INTO reservacion (cliente_id, mesa_id, fecha, hora, personas, estado, notas)
+    `INSERT INTO reserva (cliente_id, mesa_id, cantidad_personas, fecha_reserva, hora_reserva, estado, observaciones)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [cliente_id, mesa_id, fecha, hora, personas, estado, notas]
+    [cliente_id, mesa_id, cantidad_personas, fecha_reserva, hora_reserva, estado, observaciones]
   )
   return result
 }
 
-const updateReservation = async (
-  id,
-  mesa_id,
-  fecha,
-  hora,
-  personas,
-  estado,
-  notas
-) => {
+const updateReservation = async (id, mesa_id, cantidad_personas, fecha_reserva, hora_reserva, estado, observaciones = null) => {
   const [result] = await db.query(
-    `UPDATE reservacion
-     SET mesa_id = ?, fecha = ?, hora = ?, personas = ?, estado = ?, notas = ?
+    `UPDATE reserva
+     SET mesa_id = ?, cantidad_personas = ?, fecha_reserva = ?, hora_reserva = ?, estado = ?, observaciones = ?
      WHERE id = ?`,
-    [mesa_id, fecha, hora, personas, estado, notas, id]
+    [mesa_id, cantidad_personas, fecha_reserva, hora_reserva, estado, observaciones, id]
+  )
+  return result
+}
+
+const updateReservationStatus = async (id, estado) => {
+  const validStates = ['pendiente', 'confirmada', 'cancelada', 'completada', 'no_asistio']
+  if (!validStates.includes(estado)) {
+    throw new Error('Estado invalido')
+  }
+  const [result] = await db.query(
+    `UPDATE reserva SET estado = ? WHERE id = ?`,
+    [estado, id]
   )
   return result
 }
 
 const deleteReservation = async (id) => {
   const [result] = await db.query(
-    `DELETE FROM reservacion WHERE id = ?`,
+    `DELETE FROM reserva WHERE id = ?`,
     [id]
   )
   return result
 }
 
-const getAvailableTables = async (fecha, hora) => {
+const getReservationsByDate = async (fecha_reserva) => {
   const [rows] = await db.query(
-    `SELECT m.id, m.nombre, m.capacidad, m.ubicacion
+    `SELECT r.id, r.cliente_id, r.mesa_id, r.cantidad_personas,
+            r.fecha_reserva, r.hora_reserva, r.estado, r.observaciones, r.creado_en,
+            c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.email AS cliente_email,
+            m.numero AS mesa_numero
+     FROM reserva r
+     LEFT JOIN cliente c ON r.cliente_id = c.id
+     LEFT JOIN mesa m ON r.mesa_id = m.id
+     WHERE r.fecha_reserva = ?
+     ORDER BY r.hora_reserva`,
+    [fecha_reserva]
+  )
+  return rows
+}
+
+const getAvailableTablesForReservation = async (fecha_reserva, hora_reserva, cantidad_personas) => {
+  const [rows] = await db.query(
+    `SELECT m.id, m.numero, m.capacidad
      FROM mesa m
-     WHERE m.activa = 1
+     WHERE m.estado != 'mantenimiento'
+     AND m.capacidad >= ?
      AND m.id NOT IN (
-       SELECT r.mesa_id FROM reservacion r
-       WHERE r.fecha = ?
+       SELECT r.mesa_id
+       FROM reserva r
+       WHERE r.fecha_reserva = ?
        AND r.estado IN ('pendiente', 'confirmada')
      )
      ORDER BY m.capacidad ASC`,
-    [fecha]
+    [cantidad_personas, fecha_reserva]
+  )
+  return rows
+}
+
+const getPendingReservations = async () => {
+  const [rows] = await db.query(
+    `SELECT r.id, r.cliente_id, r.mesa_id, r.cantidad_personas,
+            r.fecha_reserva, r.hora_reserva, r.estado, r.observaciones, r.creado_en,
+            c.nombre AS cliente_nombre, c.telefono AS cliente_telefono, c.email AS cliente_email,
+            m.numero AS mesa_numero
+     FROM reserva r
+     LEFT JOIN cliente c ON r.cliente_id = c.id
+     LEFT JOIN mesa m ON r.mesa_id = m.id
+     WHERE r.estado = 'pendiente'
+     ORDER BY r.fecha_reserva, r.hora_reserva`
   )
   return rows
 }
@@ -102,9 +134,12 @@ const getAvailableTables = async (fecha, hora) => {
 module.exports = {
   showReservations,
   findReservationById,
-  createCustomer,
+  findReservationByClientId,
   createReservation,
   updateReservation,
+  updateReservationStatus,
   deleteReservation,
-  getAvailableTables
+  getReservationsByDate,
+  getAvailableTablesForReservation,
+  getPendingReservations
 }

@@ -10,7 +10,7 @@ const verifyToken = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, "secreto")
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "secreto")
     req.user = decoded
 
     if (!req.user.rol) {

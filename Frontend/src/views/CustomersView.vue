@@ -12,8 +12,7 @@ const editingCustomer = ref(null)
 const formData = ref({
   nombre: '',
   telefono: '',
-  correo: '',
-  notas: ''
+  email: ''
 })
 
 const nombreError = ref('')
@@ -41,7 +40,7 @@ const filteredCustomers = computed(() => {
 
   return customers.value.filter(customer => {
     const matchesSearch = customer.nombre.toLowerCase().includes(searchText) ||
-                          (customer.correo && customer.correo.toLowerCase().includes(searchText)) ||
+                          (customer.email && customer.email.toLowerCase().includes(searchText)) ||
                           customer.telefono.includes(searchText)
     return matchesSearch
   })
@@ -49,8 +48,8 @@ const filteredCustomers = computed(() => {
 
 const stats = computed(() => ({
   total: customers.value.length,
-  withEmail: customers.value.filter(c => c.correo).length,
-  withNotes: customers.value.filter(c => c.notas).length
+  withEmail: customers.value.filter(c => c.email).length,
+  withPhone: customers.value.filter(c => c.telefono).length
 }))
 
 const loadCustomers = async () => {
@@ -61,12 +60,11 @@ onMounted(loadCustomers)
 
 const openAddModal = () => {
   editingCustomer.value = null
-  formData.value = {
+const formData = ref({
     nombre: '',
     telefono: '',
-    correo: '',
-    notas: ''
-  }
+    email: ''
+  })
   showModal.value = true
 }
 
@@ -75,8 +73,7 @@ const openEditModal = (customer) => {
   formData.value = {
     nombre: customer.nombre,
     telefono: customer.telefono,
-    correo: customer.correo || '',
-    notas: customer.notas || ''
+    email: customer.email || ''
   }
   showModal.value = true
 }
@@ -95,19 +92,18 @@ const saveCustomer = async () => {
   const payload = {
     nombre: formData.value.nombre,
     telefono: formData.value.telefono,
-    correo: formData.value.correo || null,
-    notas: formData.value.notas || null
+    email: formData.value.email || null
   }
 
   try {
     if (editingCustomer.value) {
-      await apiFetch(`http://localhost:3000/api/customers/${editingCustomer.value.id}`, {
+      await apiFetch(`/api/customers/${editingCustomer.value.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
     } else {
-      await apiFetch('http://localhost:3000/api/customers', {
+      await apiFetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -126,7 +122,7 @@ const deleteCustomer = async (customer) => {
   if (!confirm(`¿Estás seguro de eliminar a ${customer.nombre}?`)) return
 
   try {
-    await apiFetch(`http://localhost:3000/api/customers/${customer.id}`, {
+    await apiFetch(`/api/customers/${customer.id}`, {
       method: 'DELETE'
     })
 
@@ -163,8 +159,8 @@ const deleteCustomer = async (customer) => {
         <p class="stat-value stat-success">{{ stats.withEmail }}</p>
       </div>
       <div class="stat-card">
-        <p class="stat-label">Con Notas</p>
-        <p class="stat-value stat-primary">{{ stats.withNotes }}</p>
+        <p class="stat-label">Con Telefono</p>
+        <p class="stat-value stat-primary">{{ stats.withPhone }}</p>
       </div>
     </div>
 
@@ -202,7 +198,7 @@ const deleteCustomer = async (customer) => {
             <div class="customer-name-row">
               <h3 class="customer-name">{{ customer.nombre }}</h3>
             </div>
-            <p class="customer-email">{{ customer.correo || 'Sin email' }}</p>
+            <p class="customer-email">{{ customer.email || 'Sin email' }}</p>
             <div class="customer-meta">
               <span class="customer-phone">
                 <span class="material-symbols-outlined">call</span>
@@ -210,11 +206,6 @@ const deleteCustomer = async (customer) => {
               </span>
             </div>
           </div>
-        </div>
-
-        <!-- Notes -->
-        <div v-if="customer.notas" class="customer-notes">
-          <p>{{ customer.notas }}</p>
         </div>
 
         <!-- Actions -->
@@ -249,9 +240,8 @@ const deleteCustomer = async (customer) => {
           <thead>
             <tr>
               <th>Cliente</th>
-              <th>Teléfono</th>
+              <th>Telefono</th>
               <th>Email</th>
-              <th>Notas</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -266,8 +256,7 @@ const deleteCustomer = async (customer) => {
                 </div>
               </td>
               <td class="cell-muted">{{ customer.telefono }}</td>
-              <td class="cell-muted">{{ customer.correo || '-' }}</td>
-              <td class="cell-notes">{{ customer.notas || '-' }}</td>
+              <td class="cell-muted">{{ customer.email || '-' }}</td>
               <td>
                 <div class="table-actions">
                   <button @click="openEditModal(customer)" class="btn btn-secondary btn-sm">
@@ -325,13 +314,8 @@ const deleteCustomer = async (customer) => {
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Email</label>
-                <input v-model="formData.correo" type="email" class="input" placeholder="cliente@email.com" />
+                <input v-model="formData.email" type="email" class="input" placeholder="cliente@email.com" />
               </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Notas</label>
-              <textarea v-model="formData.notas" class="input textarea" placeholder="Notas adicionales sobre el cliente..." rows="3"></textarea>
             </div>
 
             <div class="modal-actions">

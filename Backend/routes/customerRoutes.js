@@ -3,12 +3,14 @@ const router = express.Router()
 
 const {
   getCustomers,
+  getCustomerById,
   createNewCustomer,
   updateExistingCustomer,
   deleteExistingCustomer
 } = require("../controllers/customerController")
 
 router.get("/", getCustomers)
+router.get("/:id", getCustomerById)
 router.post("/", createNewCustomer)
 router.put("/:id", updateExistingCustomer)
 router.delete("/:id", deleteExistingCustomer)

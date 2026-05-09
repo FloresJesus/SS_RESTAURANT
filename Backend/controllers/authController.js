@@ -3,10 +3,12 @@ const jwt = require("jsonwebtoken")
 const { findUserByEmail } = require("../models/userModels")
 
 const login = async (req, res) => {
-
   const { email, password } = req.body
 
   try {
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email y contrasena son requeridos" })
+    }
 
     const user = await findUserByEmail(email)
 
@@ -14,15 +16,19 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "Usuario no encontrado" })
     }
 
-    const validPassword = await bcrypt.compare(password, user.clave_hash)
+    if (!user.activo) {
+      return res.status(401).json({ message: "Usuario inactivo" })
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password_hash)
 
     if (!validPassword) {
-      return res.status(401).json({ message: "Contraseña incorrecta" })
+      return res.status(401).json({ message: "Contrasena incorrecta" })
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.correo, rol: user.rol },
-      "secreto",
+      { id: user.id, email: user.email, rol: user.rol },
+      process.env.JWT_SECRET || "secreto",
       { expiresIn: "8h" }
     )
 
@@ -32,16 +38,15 @@ const login = async (req, res) => {
         id: user.id,
         nombre: user.nombre,
         apellido: user.apellido,
-        email: user.correo,
+        email: user.email,
         rol: user.rol,
-        activo: user.activo
+        activo: Boolean(user.activo)
       }
     })
-
   } catch (error) {
-    res.status(500).json(error)
+    console.error("Error en login:", error)
+    res.status(500).json({ message: "Error interno del servidor" })
   }
-
 }
 
 module.exports = {

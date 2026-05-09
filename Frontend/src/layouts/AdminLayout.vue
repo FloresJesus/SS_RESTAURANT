@@ -10,12 +10,12 @@ const sidebarOpen = ref(true)
 const mobileMenuOpen = ref(false)
 
 const allNavigation = [
-  { name: 'Dashboard', path: '/', icon: 'dashboard', roles: ['admin', 'camarero', 'cocina'] },
-  { name: 'Clientes', path: '/customers', icon: 'people', roles: ['admin', 'camarero'] },
-  { name: 'Menu', path: '/menu', icon: 'restaurant_menu', roles: ['admin', 'camarero', 'cocina'] },
-  { name: 'Pedidos', path: '/orders', icon: 'receipt_long', roles: ['admin', 'camarero', 'cocina'] },
-  { name: 'Mesas', path: '/tables', icon: 'table_restaurant', roles: ['admin', 'camarero'] },
-  { name: 'Empleados', path: '/employees', icon: 'groups', roles: ['admin'] }
+  { name: 'Dashboard', path: '/', icon: 'dashboard', roles: ['admin', 'cajero', 'mesero', 'cocina'] },
+  { name: 'Clientes', path: '/customers', icon: 'people', roles: ['admin', 'cajero', 'mesero'] },
+  { name: 'Menu', path: '/menu', icon: 'restaurant_menu', roles: ['admin', 'cajero', 'mesero', 'cocina'] },
+  { name: 'Pedidos', path: '/orders', icon: 'receipt_long', roles: ['admin', 'cajero', 'mesero', 'cocina'] },
+  { name: 'Mesas', path: '/tables', icon: 'table_restaurant', roles: ['admin', 'cajero', 'mesero'] },
+  { name: 'Usuarios', path: '/employees', icon: 'groups', roles: ['admin'] }
 ]
 
 const navigation = computed(() => {
@@ -39,7 +39,7 @@ const displayName = computed(() => {
   return `${authStore.user.nombre} ${authStore.user.apellido}`
 })
 
-const roleLabels = { admin: 'Administrador', camarero: 'Camarero', cocina: 'Cocina' }
+const roleLabels = { admin: 'Administrador', cajero: 'Cajero', mesero: 'Mesero', cocina: 'Cocina' }
 
 const displayRole = computed(() => {
   return roleLabels[authStore.user?.rol] || 'Sin rol'

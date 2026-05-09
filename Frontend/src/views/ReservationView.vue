@@ -153,6 +153,12 @@ const submitReservation = async () => {
 </template>
 
 <style scoped>
+.background-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
 .reservation-page {
   min-height: 100vh;
   background: linear-gradient(135deg, #f0f4f3 0%, #e8ede9 100%);

@@ -2,34 +2,97 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiFetch, API_BASE } from '@/utils/api'
 
+export interface MenuItem {
+  id: number
+  categoria_id: number | null
+  categoria_nombre: string
+  nombre: string
+  descripcion: string
+  precio: number
+  imagen_url: string | null
+  disponible: boolean
+  creado_en: string
+}
+
+export interface OrderItem {
+  id: number
+  producto_id: number
+  nombre: string
+  cantidad: number
+  precio_unitario: number
+  subtotal: number
+  estado: string
+  observaciones: string | null
+}
+
+export interface Order {
+  id: number
+  mesa_id: number
+  mesa_numero: number
+  cliente_id: number | null
+  cliente_nombre: string | null
+  reserva_id: number | null
+  mesero_id: number
+  mesero_nombre: string | null
+  estado_servicio: string
+  estado_pago: string
+  observaciones: string | null
+  subtotal: number
+  impuesto: number
+  total: number
+  time: string
+  creado_en: string
+  status: string
+  items: OrderItem[]
+}
+
+export interface Table {
+  id: number
+  numero: number
+  capacidad: number
+  estado: 'libre' | 'ocupada' | 'mantenimiento'
+  tiene_pedido_activo: boolean
+}
+
+export interface Reservation {
+  id: number
+  cliente_id: number | null
+  mesa_id: number
+  cantidad_personas: number
+  fecha_reserva: string
+  hora_reserva: string
+  estado: 'pendiente' | 'confirmada' | 'cancelada' | 'completada' | 'no_asistio'
+  observaciones: string | null
+  creado_en: string
+  cliente_nombre: string | null
+  cliente_telefono: string | null
+  cliente_email: string | null
+  mesa_numero: number | null
+}
+
+export interface Customer {
+  id: number
+  nombre: string
+  telefono: string
+  email: string | null
+  creado_en: string
+}
+
+export interface SalesStats {
+  weekly: { day: string; sales: number }[]
+  topProducts: { name: string; quantity: number; value: number }[]
+  today: { orders: number; sales: number }
+}
+
 export const useRestaurantStore = defineStore('restaurant', () => {
-  const menuItems = ref([
-    { id: 0, name: 'Lomo Saltado', category: 'Platos Principales', price: 0, description: 'Carne salteada con cebolla, tomate y papas fritas.', available: true, imagen: null },
-    { id: 0, name: 'Ceviche Mixto', category: 'Entradas', price: 0, description: 'Pescado y mariscos en salsa de limón y ají.', available: true, imagen: null },
-    { id: 0, name: 'Tiradito', category: 'Entradas', price: 0, description: 'Filete de pescado en salsa de ají amarillo y leche de tigre.', available: true, imagen: null },
-    { id: 0, name: 'Suspiro Limeño', category: 'Postres', price: 0, description: 'Dulce de leche con merengue y canela.', available: true, imagen: null },
-    { id: 0, name: 'Limonada', category: 'Bebidas', price: 0, description: 'Refrescante limonada con hierbabuena.', available: true, imagen: null }
-  ])
+  const menuItems = ref<MenuItem[]>([])
+  const categories = ref<{ id: number; nombre: string }[]>([])
+  const orders = ref<Order[]>([])
+  const tables = ref<Table[]>([])
+  const reservations = ref<Reservation[]>([])
+  const customers = ref<Customer[]>([])
 
-  const orders = ref([
-    { id: 0, table: 'A1', waiter: 'Luis', time: '00:00', status: 'pending', total: 0, items: [ { name: 'Lomo Saltado', qty: 0, price: 0 }, { name: 'Limonada', qty: 0, price: 0 } ] },
-    { id: 0, table: 'B3', waiter: 'María', time: '00:00', status: 'preparing', total: 0, items: [ { name: 'Ceviche Mixto', qty: 0, price: 0 }, { name: 'Tiradito', qty: 0, price: 0 }, { name: 'Limonada', qty: 0, price: 0 } ] }
-  ])
-
-  const tables = ref([
-    { id: 0, number: 'A1', capacity: 4, status: 'available', reservation: null },
-    { id: 1, number: 'B2', capacity: 2, status: 'occupied', reservation: null },
-    { id: 2, number: 'C3', capacity: 5, status: 'reserved', reservation: { name: 'Lucía', time: '20:00', guests: 3 } },
-    { id: 3, number: 'D4', capacity: 6, status: 'available', reservation: null }
-  ])
-
-  const reservations = ref([
-    { id: 0, name: 'Lucía', phone: '555-1234', guests: 3, date: new Date().toISOString().split('T')[0], time: '20:00', notes: '', status: 'pending', table: 'C3' }
-  ])
-
-  const customers = ref<any[]>([])
-
-  const salesData = ref({
+  const salesData = ref<SalesStats>({
     weekly: [
       { day: 'Lun', sales: 0 },
       { day: 'Mar', sales: 0 },
@@ -39,21 +102,14 @@ export const useRestaurantStore = defineStore('restaurant', () => {
       { day: 'Sáb', sales: 0 },
       { day: 'Dom', sales: 0 }
     ],
-    categories: [
-      { name: 'Platos', value: 0 },
-      { name: 'Bebidas', value: 0 },
-      { name: 'Postres', value: 0 },
-      { name: 'Snacks', value: 0 }
-    ]
+    topProducts: [],
+    today: { orders: 0, sales: 0 }
   })
 
   const loadSalesStats = async () => {
     try {
       const data = await apiFetch(`${API_BASE}/orders/stats`)
-      salesData.value = {
-        weekly: data.weekly || [],
-        categories: data.categories || []
-      }
+      salesData.value = data
     } catch (error) {
       console.error("Error cargando estadisticas de ventas:", error)
     }
@@ -64,18 +120,26 @@ export const useRestaurantStore = defineStore('restaurant', () => {
       const data = await apiFetch(`${API_BASE}/menu`)
       menuItems.value = data.map((item: any) => ({
         id: item.id,
-        name: item.nombre,
-        category: item.categoria,
-        price: Number(item.precio),
-        description: item.descripcion,
-        available: Boolean(item.disponible),
-        tiempo_cocina_min: item.tiempo_cocina_min,
-        nota_alergenos: item.nota_alergenos,
-        imagen: item.imagen,
-        createdAt: item.creado_en
+        categoria_id: item.categoria_id,
+        categoria_nombre: item.categoria_nombre || 'Sin categoria',
+        nombre: item.nombre,
+        descripcion: item.descripcion || '',
+        precio: Number(item.precio),
+        imagen_url: item.imagen_url,
+        disponible: Boolean(item.disponible),
+        creado_en: item.creado_en
       }))
     } catch (error) {
       console.error("Error cargando menu:", error)
+    }
+  }
+
+  const loadCategories = async () => {
+    try {
+      const data = await apiFetch(`${API_BASE}/menu/categorias`)
+      categories.value = data
+    } catch (error) {
+      console.error("Error cargando categorias:", error)
     }
   }
 
@@ -90,19 +154,16 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const addMenuItem = async (item: any) => {
     const payload: any = {
-      categoria: item.category,
-      nombre: item.name,
-      descripcion: item.description,
-      precio: Number(item.price),
-      disponible: item.available,
-      tiempo_cocina_min: Number(item.tiempo_cocina_min || 15),
-      nota_alergenos: item.nota_alergenos || null,
-      imagen: item.imagen || null
+      categoria_id: item.categoria_id || null,
+      nombre: item.nombre,
+      descripcion: item.descripcion || '',
+      precio: Number(item.precio),
+      disponible: item.disponible !== false
     }
 
     if (item.imageFile) {
       const upload = await uploadMenuImage(item.imageFile)
-      payload.imagen = upload.path
+      payload.imagen_url = upload.path
     }
 
     await apiFetch(`${API_BASE}/menu`, {
@@ -115,19 +176,16 @@ export const useRestaurantStore = defineStore('restaurant', () => {
 
   const updateMenuItem = async (id: number, update: any) => {
     const payload: any = {
-      categoria: update.category,
-      nombre: update.name,
-      descripcion: update.description,
-      precio: Number(update.price),
-      disponible: update.available,
-      tiempo_cocina_min: Number(update.tiempo_cocina_min || 15),
-      nota_alergenos: update.nota_alergenos || null,
-      imagen: update.imagen || null
+      categoria_id: update.categoria_id || null,
+      nombre: update.nombre,
+      descripcion: update.descripcion || '',
+      precio: Number(update.precio),
+      disponible: update.disponible !== false
     }
 
     if (update.imageFile) {
       const upload = await uploadMenuImage(update.imageFile)
-      payload.imagen = upload.path
+      payload.imagen_url = upload.path
     }
 
     await apiFetch(`${API_BASE}/menu/${id}`, {
@@ -144,97 +202,119 @@ export const useRestaurantStore = defineStore('restaurant', () => {
   }
 
   const loadOrders = async () => {
-    const data = await apiFetch(`${API_BASE}/orders`)
-    orders.value = data
+    try {
+      const data = await apiFetch(`${API_BASE}/orders`)
+      orders.value = data
+    } catch (error) {
+      console.error("Error cargando pedidos:", error)
+    }
+  }
+
+  const getOrderById = async (id: number) => {
+    return apiFetch(`${API_BASE}/orders/${id}`)
   }
 
   const updateOrderStatus = async (id: number, status: string) => {
     await apiFetch(`${API_BASE}/orders/${id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      })
-      await loadOrders()
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    })
+    await loadOrders()
   }
 
   const createOrder = async (order: any) => {
-    await apiFetch(`${API_BASE}/orders`, {
+    const response = await apiFetch(`${API_BASE}/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order)
     })
     await loadOrders()
+    await loadTables()
+    return response
+  }
+
+  const updateOrderItems = async (orderId: number, items: any[]) => {
+    await apiFetch(`${API_BASE}/orders/${orderId}/items`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    })
+    await loadOrders()
   }
 
   const loadTables = async () => {
-    const data = await apiFetch(`${API_BASE}/tables`)
-    tables.value = data.map((row: any) => ({
-      id: row.id,
-      number: row.nombre || `Mesa ${row.id}`,
-      capacity: row.capacidad,
-      status: row.activa
-        ? row.occupied
-          ? 'occupied'
-          : row.reservation_id
-            ? 'reserved'
-            : 'available'
-        : 'unavailable',
-      reservation: row.reservation_id
-        ? {
-            id: row.reservation_id,
-            name: row.cliente_nombre,
-            phone: row.cliente_telefono,
-            guests: row.personas,
-            date: row.fecha,
-            time: row.hora,
-            notes: row.notas,
-            status: row.reservation_estado,
-            table: row.nombre || `Mesa ${row.id}`
-          }
-        : null
-    }))
+    try {
+      const data = await apiFetch(`${API_BASE}/tables`)
+      tables.value = data.map((row: any) => ({
+        id: row.id,
+        numero: row.numero,
+        capacidad: row.capacidad,
+        estado: row.estado,
+        tiene_pedido_activo: Boolean(row.tiene_pedido_activo)
+      }))
+    } catch (error) {
+      console.error("Error cargando mesas:", error)
+    }
   }
 
   const createTable = async (table: any) => {
     await apiFetch(`${API_BASE}/tables`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(table)
+      body: JSON.stringify({
+        numero: table.numero,
+        capacidad: Number(table.capacidad)
+      })
     })
     await loadTables()
   }
 
-  const updateTableStatus = async (id: number, status: string) => {
-    const table = tables.value.find((t) => t.id === id)
-    if (!table) return
-    table.status = status
+  const updateTableStatus = async (id: number, estado: 'libre' | 'ocupada' | 'mantenimiento') => {
+    await apiFetch(`${API_BASE}/tables/${id}/estado`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado })
+    })
+    await loadTables()
+  }
+
+  const getAvailableTables = async () => {
+    return apiFetch(`${API_BASE}/tables/disponibles`)
   }
 
   const loadReservations = async () => {
-    const data = await apiFetch(`${API_BASE}/reservations`)
-    reservations.value = data.map((item: any) => ({
-      id: item.id,
-      mesa_id: item.mesa_id,
-      name: item.nombre,
-      phone: item.telefono,
-      email: item.correo,
-      table: item.mesa_nombre || `Mesa ${item.mesa_id}`,
-      guests: item.personas,
-      date: item.fecha,
-      time: item.hora,
-      notes: item.notas,
-      status: item.estado
-    }))
+    try {
+      const data = await apiFetch(`${API_BASE}/reservations`)
+      reservations.value = data.map((item: any) => ({
+        id: item.id,
+        cliente_id: item.cliente_id,
+        mesa_id: item.mesa_id,
+        cantidad_personas: item.cantidad_personas,
+        fecha_reserva: item.fecha_reserva,
+        hora_reserva: item.hora_reserva,
+        estado: item.estado,
+        observaciones: item.observaciones,
+        creado_en: item.creado_en,
+        cliente_nombre: item.cliente_nombre,
+        cliente_telefono: item.cliente_telefono,
+        cliente_email: item.cliente_email,
+        mesa_numero: item.mesa_numero
+      }))
+    } catch (error) {
+      console.error("Error cargando reservaciones:", error)
+    }
   }
 
   const createReservation = async (reservation: any) => {
-    await apiFetch(`${API_BASE}/reservations`, {
+    const response = await apiFetch(`${API_BASE}/reservations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reservation)
     })
     await loadReservations()
     await loadTables()
+    return response
   }
 
   const updateReservation = async (id: number, update: any) => {
@@ -247,15 +327,32 @@ export const useRestaurantStore = defineStore('restaurant', () => {
     await loadTables()
   }
 
+  const updateReservationStatus = async (id: number, estado: string) => {
+    await apiFetch(`${API_BASE}/reservations/${id}/estado`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado })
+    })
+    await loadReservations()
+  }
+
+  const getAvailableTablesForReservation = async (fecha: string, cantidad: number) => {
+    return apiFetch(`${API_BASE}/reservations/mesas-disponibles?fecha_reserva=${fecha}&cantidad_personas=${cantidad}`)
+  }
+
   const loadCustomers = async () => {
-    const data = await apiFetch(`${API_BASE}/customers`)
-    customers.value = data.map((item: any) => ({
-      id: item.id,
-      name: item.nombre,
-      phone: item.telefono,
-      email: item.correo,
-      notes: item.notas
-    }))
+    try {
+      const data = await apiFetch(`${API_BASE}/customers`)
+      customers.value = data.map((item: any) => ({
+        id: item.id,
+        nombre: item.nombre,
+        telefono: item.telefono,
+        email: item.email,
+        creado_en: item.creado_en
+      }))
+    } catch (error) {
+      console.error("Error cargando clientes:", error)
+    }
   }
 
   const createCustomer = async (customer: any) => {
@@ -263,14 +360,31 @@ export const useRestaurantStore = defineStore('restaurant', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        nombre: customer.name,
-        telefono: customer.phone,
-        correo: customer.email || null,
-        notas: customer.notes || null
+        nombre: customer.nombre,
+        telefono: customer.telefono,
+        email: customer.email || null
       })
     })
     await loadCustomers()
     return response
+  }
+
+  const updateCustomer = async (id: number, customer: any) => {
+    await apiFetch(`${API_BASE}/customers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: customer.nombre,
+        telefono: customer.telefono,
+        email: customer.email || null
+      })
+    })
+    await loadCustomers()
+  }
+
+  const deleteCustomer = async (id: number) => {
+    await apiFetch(`${API_BASE}/customers/${id}`, { method: 'DELETE' })
+    await loadCustomers()
   }
 
   const createPayment = async (payment: any) => {
@@ -282,18 +396,35 @@ export const useRestaurantStore = defineStore('restaurant', () => {
   }
 
   const getPayments = async (pedido_id: number) => {
-    const data = await apiFetch(`${API_BASE}/payments?pedido_id=${pedido_id}`)
-    return data
+    return apiFetch(`${API_BASE}/payments?pedido_id=${pedido_id}`)
+  }
+
+  const generateTicket = async (pedido_id: number) => {
+    return apiFetch(`${API_BASE}/tickets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pedido_id })
+    })
+  }
+
+  const generateInvoice = async (invoice: any) => {
+    return apiFetch(`${API_BASE}/invoices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(invoice)
+    })
   }
 
   return {
     menuItems,
+    categories,
     orders,
     tables,
     reservations,
     customers,
     salesData,
     loadMenuItems,
+    loadCategories,
     loadOrders,
     loadTables,
     loadReservations,
@@ -305,12 +436,21 @@ export const useRestaurantStore = defineStore('restaurant', () => {
     uploadMenuImage,
     createReservation,
     updateReservation,
+    updateReservationStatus,
     updateTableStatus,
     createTable,
     updateOrderStatus,
     createOrder,
+    updateOrderItems,
+    getOrderById,
     createCustomer,
+    updateCustomer,
+    deleteCustomer,
     createPayment,
-    getPayments
+    getPayments,
+    generateTicket,
+    generateInvoice,
+    getAvailableTables,
+    getAvailableTablesForReservation
   }
 })

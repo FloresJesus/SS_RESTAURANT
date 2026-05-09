@@ -1,74 +1,155 @@
 const db = require("../config/db")
 
-const getMenuItems = async () => {
+const getCategories = async () => {
   const [rows] = await db.query(
-    `SELECT id, categoria, nombre, descripcion, precio, disponible, tiempo_cocina_min, nota_alergenos, imagen, creado_en
-     FROM plato
-     ORDER BY creado_en DESC`
+    `SELECT id, nombre
+     FROM categoria_producto
+     ORDER BY nombre`
   )
   return rows
 }
 
-const findMenuItemById = async (id) => {
+const findCategoryById = async (id) => {
   const [rows] = await db.query(
-    `SELECT id, categoria, nombre, descripcion, precio, disponible, tiempo_cocina_min, nota_alergenos, imagen, creado_en
-     FROM plato
-     WHERE id = ?`,
+    `SELECT id, nombre FROM categoria_producto WHERE id = ?`,
     [id]
   )
   return rows[0]
 }
 
-const createMenuItem = async (
-  categoria,
-  nombre,
-  descripcion,
-  precio,
-  disponible = true,
-  tiempo_cocina_min = 15,
-  nota_alergenos = null,
-  imagen = null
-) => {
+const findCategoryByName = async (nombre) => {
+  const [rows] = await db.query(
+    `SELECT id, nombre FROM categoria_producto WHERE nombre = ?`,
+    [nombre]
+  )
+  return rows[0]
+}
+
+const createCategory = async (nombre) => {
   const [result] = await db.query(
-    `INSERT INTO plato (categoria, nombre, descripcion, precio, disponible, tiempo_cocina_min, nota_alergenos, imagen)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [categoria, nombre, descripcion, precio, disponible, tiempo_cocina_min, nota_alergenos, imagen]
+    `INSERT INTO categoria_producto (nombre) VALUES (?)`,
+    [nombre]
   )
   return result
 }
 
-const updateMenuItem = async (
-  id,
-  categoria,
-  nombre,
-  descripcion,
-  precio,
-  disponible,
-  tiempo_cocina_min,
-  nota_alergenos,
-  imagen
-) => {
+const updateCategory = async (id, nombre) => {
   const [result] = await db.query(
-    `UPDATE plato
-     SET categoria = ?, nombre = ?, descripcion = ?, precio = ?, disponible = ?, tiempo_cocina_min = ?, nota_alergenos = ?, imagen = ?
-     WHERE id = ?`,
-    [categoria, nombre, descripcion, precio, disponible, tiempo_cocina_min, nota_alergenos, imagen, id]
+    `UPDATE categoria_producto SET nombre = ? WHERE id = ?`,
+    [nombre, id]
   )
   return result
 }
 
-const deleteMenuItem = async (id) => {
+const deleteCategory = async (id) => {
   const [result] = await db.query(
-    "DELETE FROM plato WHERE id = ?",
+    `DELETE FROM categoria_producto WHERE id = ?`,
     [id]
   )
   return result
 }
 
+const getProducts = async () => {
+  const [rows] = await db.query(
+    `SELECT p.id, p.categoria_id, p.nombre, p.descripcion, p.precio,
+            p.imagen_url, p.disponible, p.creado_en,
+            c.nombre AS categoria_nombre
+     FROM producto p
+     LEFT JOIN categoria_producto c ON p.categoria_id = c.id
+     ORDER BY c.nombre, p.nombre`
+  )
+  return rows
+}
+
+const getAvailableProducts = async () => {
+  const [rows] = await db.query(
+    `SELECT p.id, p.categoria_id, p.nombre, p.descripcion, p.precio,
+            p.imagen_url, p.disponible, p.creado_en,
+            c.nombre AS categoria_nombre
+     FROM producto p
+     LEFT JOIN categoria_producto c ON p.categoria_id = c.id
+     WHERE p.disponible = TRUE
+     ORDER BY c.nombre, p.nombre`
+  )
+  return rows
+}
+
+const findProductById = async (id) => {
+  const [rows] = await db.query(
+    `SELECT p.id, p.categoria_id, p.nombre, p.descripcion, p.precio,
+            p.imagen_url, p.disponible, p.creado_en,
+            c.nombre AS categoria_nombre
+     FROM producto p
+     LEFT JOIN categoria_producto c ON p.categoria_id = c.id
+     WHERE p.id = ?`,
+    [id]
+  )
+  return rows[0]
+}
+
+const createProduct = async (categoria_id, nombre, descripcion, precio, disponible = true, imagen_url = null) => {
+  const [result] = await db.query(
+    `INSERT INTO producto (categoria_id, nombre, descripcion, precio, disponible, imagen_url)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [categoria_id, nombre, descripcion, precio, disponible, imagen_url]
+  )
+  return result
+}
+
+const updateProduct = async (id, categoria_id, nombre, descripcion, precio, disponible, imagen_url) => {
+  const [result] = await db.query(
+    `UPDATE producto
+     SET categoria_id = ?, nombre = ?, descripcion = ?, precio = ?,
+         disponible = ?, imagen_url = ?
+     WHERE id = ?`,
+    [categoria_id, nombre, descripcion, precio, disponible, imagen_url, id]
+  )
+  return result
+}
+
+const updateProductAvailability = async (id, disponible) => {
+  const [result] = await db.query(
+    `UPDATE producto SET disponible = ? WHERE id = ?`,
+    [disponible, id]
+  )
+  return result
+}
+
+const deleteProduct = async (id) => {
+  const [result] = await db.query(
+    `DELETE FROM producto WHERE id = ?`,
+    [id]
+  )
+  return result
+}
+
+const getProductsByCategory = async (categoria_id) => {
+  const [rows] = await db.query(
+    `SELECT p.id, p.categoria_id, p.nombre, p.descripcion, p.precio,
+            p.imagen_url, p.disponible, p.creado_en,
+            c.nombre AS categoria_nombre
+     FROM producto p
+     LEFT JOIN categoria_producto c ON p.categoria_id = c.id
+     WHERE p.categoria_id = ?
+     ORDER BY p.nombre`,
+    [categoria_id]
+  )
+  return rows
+}
+
 module.exports = {
-  getMenuItems,
-  findMenuItemById,
-  createMenuItem,
-  updateMenuItem,
-  deleteMenuItem
+  getCategories,
+  findCategoryById,
+  findCategoryByName,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  getProducts,
+  getAvailableProducts,
+  findProductById,
+  createProduct,
+  updateProduct,
+  updateProductAvailability,
+  deleteProduct,
+  getProductsByCategory
 }

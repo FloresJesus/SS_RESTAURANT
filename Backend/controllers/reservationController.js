@@ -1,44 +1,110 @@
 const {
   showReservations,
   findReservationById,
-  createCustomer,
+  findReservationByClientId,
   createReservation,
   updateReservation,
-  deleteReservation
+  updateReservationStatus,
+  deleteReservation,
+  getReservationsByDate,
+  getAvailableTablesForReservation,
+  getPendingReservations
 } = require("../models/reservationModels")
 
 const getReservations = async (req, res) => {
+  const { fecha } = req.query
+
   try {
-    const reservations = await showReservations()
+    let reservations
+    if (fecha) {
+      reservations = await getReservationsByDate(fecha)
+    } else {
+      reservations = await showReservations()
+    }
     res.json(reservations)
   } catch (error) {
-    console.error(error)
+    console.error("Error al recuperar las reservaciones:", error)
     res.status(500).json({ message: "Error al recuperar las reservaciones" })
+  }
+}
+
+const getReservationById = async (req, res) => {
+  const { id } = req.params
+
+  try {
+    const reservation = await findReservationById(id)
+    if (!reservation) {
+      return res.status(404).json({ message: "Reservacion no encontrada" })
+    }
+    res.json(reservation)
+  } catch (error) {
+    console.error("Error al recuperar la reservacion:", error)
+    res.status(500).json({ message: "Error al recuperar la reservacion" })
+  }
+}
+
+const getPendingReservationsList = async (req, res) => {
+  try {
+    const reservations = await getPendingReservations()
+    res.json(reservations)
+  } catch (error) {
+    console.error("Error al recuperar reservaciones pendientes:", error)
+    res.status(500).json({ message: "Error al recuperar reservaciones pendientes" })
+  }
+}
+
+const getAvailableTables = async (req, res) => {
+  const { fecha_reserva, hora_reserva, cantidad_personas } = req.query
+
+  if (!fecha_reserva || !cantidad_personas) {
+    return res.status(400).json({ message: "Fecha y cantidad de personas son obligatorios" })
+  }
+
+  try {
+    const tables = await getAvailableTablesForReservation(
+      fecha_reserva,
+      hora_reserva || '19:00',
+      Number(cantidad_personas)
+    )
+    res.json(tables)
+  } catch (error) {
+    console.error("Error al recuperar mesas disponibles:", error)
+    res.status(500).json({ message: "Error al recuperar mesas disponibles" })
   }
 }
 
 const createNewReservation = async (req, res) => {
   const {
-    nombre,
-    telefono,
-    correo = null,
+    cliente_id,
     mesa_id,
-    fecha,
-    hora,
-    personas,
-    notas = null
+    cantidad_personas,
+    fecha_reserva,
+    hora_reserva,
+    observaciones = null
   } = req.body
 
-  if (!nombre || !telefono || !mesa_id || !fecha || !hora || !personas) {
-    return res.status(400).json({ message: "Los campos nombre, telefono, mesa, fecha, hora y personas son obligatorios" })
+  if (!mesa_id || !fecha_reserva || !hora_reserva || !cantidad_personas) {
+    return res.status(400).json({
+      message: "Mesa, fecha, hora y cantidad de personas son obligatorios"
+    })
   }
 
   try {
-    const clienteId = await createCustomer(nombre, telefono, correo)
-    await createReservation(clienteId, mesa_id, fecha, hora, personas, "pendiente", notas)
-    res.status(201).json({ message: "Reservacion creada correctamente" })
+    const result = await createReservation(
+      cliente_id || null,
+      mesa_id,
+      Number(cantidad_personas),
+      fecha_reserva,
+      hora_reserva,
+      'pendiente',
+      observaciones
+    )
+    res.status(201).json({
+      message: "Reservacion creada correctamente",
+      id: result.insertId
+    })
   } catch (error) {
-    console.error(error)
+    console.error("Error al crear la reservacion:", error)
     res.status(500).json({ message: "Error al crear la reservacion" })
   }
 }
@@ -47,15 +113,22 @@ const updateExistingReservation = async (req, res) => {
   const { id } = req.params
   const {
     mesa_id,
-    fecha,
-    hora,
-    personas,
+    cantidad_personas,
+    fecha_reserva,
+    hora_reserva,
     estado,
-    notas
+    observaciones = null
   } = req.body
 
-  if (!mesa_id || !fecha || !hora || !personas || !estado) {
-    return res.status(400).json({ message: "Los campos mesa, fecha, hora, personas y estado son obligatorios" })
+  if (!mesa_id || !fecha_reserva || !hora_reserva || !cantidad_personas || !estado) {
+    return res.status(400).json({
+      message: "Todos los campos son obligatorios"
+    })
+  }
+
+  const validStates = ['pendiente', 'confirmada', 'cancelada', 'completada', 'no_asistio']
+  if (!validStates.includes(estado)) {
+    return res.status(400).json({ message: `Estado invalido. Estados validos: ${validStates.join(', ')}` })
   }
 
   try {
@@ -64,11 +137,46 @@ const updateExistingReservation = async (req, res) => {
       return res.status(404).json({ message: "Reservacion no encontrada" })
     }
 
-    await updateReservation(id, mesa_id, fecha, hora, personas, estado, notas)
+    await updateReservation(
+      id,
+      mesa_id,
+      Number(cantidad_personas),
+      fecha_reserva,
+      hora_reserva,
+      estado,
+      observaciones
+    )
     res.json({ message: "Reservacion actualizada correctamente" })
   } catch (error) {
-    console.error(error)
+    console.error("Error al actualizar la reservacion:", error)
     res.status(500).json({ message: "Error al actualizar la reservacion" })
+  }
+}
+
+const updateReservationState = async (req, res) => {
+  const { id } = req.params
+  const { estado } = req.body
+
+  if (!estado) {
+    return res.status(400).json({ message: "Estado es obligatorio" })
+  }
+
+  const validStates = ['pendiente', 'confirmada', 'cancelada', 'completada', 'no_asistio']
+  if (!validStates.includes(estado)) {
+    return res.status(400).json({ message: `Estado invalido. Estados validos: ${validStates.join(', ')}` })
+  }
+
+  try {
+    const existingReservation = await findReservationById(id)
+    if (!existingReservation) {
+      return res.status(404).json({ message: "Reservacion no encontrada" })
+    }
+
+    await updateReservationStatus(id, estado)
+    res.json({ message: "Estado de reservacion actualizado correctamente" })
+  } catch (error) {
+    console.error("Error al actualizar estado de la reservacion:", error)
+    res.status(500).json({ message: "Error al actualizar estado de la reservacion" })
   }
 }
 
@@ -84,14 +192,18 @@ const deleteExistingReservation = async (req, res) => {
     await deleteReservation(id)
     res.json({ message: "Reservacion eliminada correctamente" })
   } catch (error) {
-    console.error(error)
+    console.error("Error al eliminar la reservacion:", error)
     res.status(500).json({ message: "Error al eliminar la reservacion" })
   }
 }
 
 module.exports = {
   getReservations,
+  getReservationById,
+  getPendingReservationsList,
+  getAvailableTables,
   createNewReservation,
   updateExistingReservation,
+  updateReservationState,
   deleteExistingReservation
 }

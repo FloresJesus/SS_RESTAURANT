@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { useAuthStore } from '@/stores/auth'
+import { apiFetch } from '@/utils/api'
 
 const store = useRestaurantStore()
 const authStore = useAuthStore()
@@ -13,28 +14,33 @@ const activeTab = ref('tables')
 const showReservationModal = ref(false)
 
 const reservationForm = ref({
-  name: '',
-  phone: '',
-  email: '',
-  tableId: null,
-  guests: 2,
-  date: '',
-  time: '',
-  notes: ''
+  cliente_id: null,
+  mesa_id: null,
+  cantidad_personas: 2,
+  fecha_reserva: '',
+  hora_reserva: '19:00',
+  observaciones: ''
 })
 
+const newCustomerForm = ref({
+  nombre: '',
+  telefono: '',
+  email: ''
+})
+const showNewCustomerForm = ref(false)
+
 const tableStats = computed(() => ({
-  available: store.tables.filter(t => t.status === 'available').length,
-  occupied: store.tables.filter(t => t.status === 'occupied').length,
-  reserved: store.tables.filter(t => t.status === 'reserved').length,
+  available: store.tables.filter(t => t.estado === 'libre').length,
+  occupied: store.tables.filter(t => t.estado === 'ocupada').length,
+  reserved: store.tables.filter(t => t.estado === 'mantenimiento').length,
   total: store.tables.length
 }))
 
 const getStatusInfo = (status) => {
   const info = {
-    available: { label: 'Disponible', badgeClass: 'badge-success' },
-    occupied: { label: 'Ocupada', badgeClass: 'badge-danger' },
-    reserved: { label: 'Reservada', badgeClass: 'badge-warning' }
+    libre: { label: 'Libre', badgeClass: 'badge-success' },
+    ocupada: { label: 'Ocupada', badgeClass: 'badge-danger' },
+    mantenimiento: { label: 'Mantenimiento', badgeClass: 'badge-warning' }
   }
   return info[status] || { label: status, badgeClass: '' }
 }
@@ -43,43 +49,44 @@ const getReservationStatusInfo = (status) => {
   const info = {
     confirmada: { label: 'Confirmada', badgeClass: 'badge-success' },
     pendiente: { label: 'Pendiente', badgeClass: 'badge-warning' },
-    cancelada: { label: 'Cancelada', badgeClass: 'badge-danger' }
+    cancelada: { label: 'Cancelada', badgeClass: 'badge-danger' },
+    completada: { label: 'Completada', badgeClass: 'badge-info' },
+    no_asistio: { label: 'No Asistio', badgeClass: 'badge-muted' }
   }
   return info[status] || { label: status, badgeClass: '' }
 }
 
-const updateTableStatus = (tableId, newStatus) => {
-  store.updateTableStatus(tableId, newStatus)
+const updateTableStatus = async (tableId, newStatus) => {
+  try {
+    await store.updateTableStatus(tableId, newStatus)
+  } catch (error) {
+    console.error('Error actualizando estado de mesa:', error)
+    alert(error.message || 'Error al actualizar estado')
+  }
 }
 
 const showTableModal = ref(false)
 const tableForm = ref({
-  nombre: '',
-  capacidad: 2,
-  ubicacion: '',
-  activa: true
+  numero: '',
+  capacidad: 2
 })
 
 const openTableModal = () => {
   tableForm.value = {
-    nombre: '',
-    capacidad: 2,
-    ubicacion: '',
-    activa: true
+    numero: '',
+    capacidad: 2
   }
   showTableModal.value = true
 }
 
 const saveTable = async () => {
-  if (!tableForm.value.nombre || tableForm.value.capacidad <= 0) {
+  if (!tableForm.value.numero || tableForm.value.capacidad <= 0) {
     return
   }
   try {
     await store.createTable({
-      nombre: tableForm.value.nombre,
-      capacidad: Number(tableForm.value.capacidad),
-      ubicacion: tableForm.value.ubicacion || null,
-      activa: tableForm.value.activa
+      numero: tableForm.value.numero,
+      capacidad: Number(tableForm.value.capacidad)
     })
     showTableModal.value = false
   } catch (error) {
@@ -90,31 +97,57 @@ const saveTable = async () => {
 
 const openReservationModal = () => {
   reservationForm.value = {
-    name: '',
-    phone: '',
-    email: '',
-    tableId: null,
-    guests: 2,
-    date: new Date().toISOString().split('T')[0],
-    time: '19:00',
-    notes: ''
+    cliente_id: null,
+    mesa_id: null,
+    cantidad_personas: 2,
+    fecha_reserva: new Date().toISOString().split('T')[0],
+    hora_reserva: '19:00',
+    observaciones: ''
   }
+  showNewCustomerForm.value = false
   showReservationModal.value = true
 }
 
+const createNewCustomer = async () => {
+  if (!newCustomerForm.value.nombre || !newCustomerForm.value.telefono) {
+    alert('Nombre y telefono son obligatorios')
+    return
+  }
+
+  try {
+    const result = await store.createCustomer({
+      nombre: newCustomerForm.value.nombre,
+      telefono: newCustomerForm.value.telefono,
+      email: newCustomerForm.value.email || null
+    })
+    
+    if (result && result.id) {
+      reservationForm.value.cliente_id = result.id
+      showNewCustomerForm.value = false
+      newCustomerForm.value = { nombre: '', telefono: '', email: '' }
+    }
+  } catch (error) {
+    alert('Error al crear cliente')
+  }
+}
+
 const saveReservation = async () => {
+  if (!reservationForm.value.mesa_id || !reservationForm.value.fecha_reserva || !reservationForm.value.hora_reserva) {
+    alert('Mesa, fecha y hora son obligatorios')
+    return
+  }
+
   try {
     await store.createReservation({
-      nombre: reservationForm.value.name,
-      telefono: reservationForm.value.phone,
-      correo: reservationForm.value.email || null,
-      mesa_id: reservationForm.value.tableId,
-      fecha: reservationForm.value.date,
-      hora: reservationForm.value.time,
-      personas: reservationForm.value.guests,
-      notas: reservationForm.value.notes
+      cliente_id: reservationForm.value.cliente_id || null,
+      mesa_id: reservationForm.value.mesa_id,
+      cantidad_personas: reservationForm.value.cantidad_personas,
+      fecha_reserva: reservationForm.value.fecha_reserva,
+      hora_reserva: reservationForm.value.hora_reserva,
+      observaciones: reservationForm.value.observaciones || null
     })
     showReservationModal.value = false
+    await store.loadTables()
   } catch (error) {
     console.error('Error creando reservacion:', error)
     alert(error.message || 'Error al crear reservacion')
@@ -122,17 +155,8 @@ const saveReservation = async () => {
 }
 
 const confirmReservation = async (id) => {
-  const reservation = store.reservations.find((r) => r.id === id)
-  if (!reservation) return
   try {
-    await store.updateReservation(id, {
-      mesa_id: reservation.mesa_id,
-      fecha: reservation.date,
-      hora: reservation.time,
-      personas: reservation.guests,
-      estado: 'confirmada',
-      notas: reservation.notes
-    })
+    await store.updateReservationStatus(id, 'confirmada')
   } catch (error) {
     console.error('Error confirmando reservacion:', error)
     alert(error.message || 'Error al confirmar reservacion')
@@ -140,31 +164,42 @@ const confirmReservation = async (id) => {
 }
 
 const cancelReservation = async (id) => {
-  const reservation = store.reservations.find((r) => r.id === id)
-  if (!reservation) return
   try {
-    await store.updateReservation(id, {
-      mesa_id: reservation.mesa_id,
-      fecha: reservation.date,
-      hora: reservation.time,
-      personas: reservation.guests,
-      estado: 'cancelada',
-      notas: reservation.notes
-    })
+    await store.updateReservationStatus(id, 'cancelada')
   } catch (error) {
     console.error('Error cancelando reservacion:', error)
     alert(error.message || 'Error al cancelar reservacion')
   }
 }
 
+const deleteTable = async (id) => {
+  if (!confirm('¿Estás seguro de eliminar esta mesa?')) return
+  try {
+    await apiFetch(`/api/tables/${id}`, { method: 'DELETE' })
+    await store.loadTables()
+  } catch (error) {
+    alert(error.message || 'Error al eliminar mesa')
+  }
+}
+
+const markNoShow = async (id) => {
+  try {
+    await store.updateReservationStatus(id, 'no_asistio')
+  } catch (error) {
+    console.error('Error marcando no asistio:', error)
+    alert(error.message || 'Error al marcar no asistio')
+  }
+}
+
 onMounted(async () => {
   await store.loadReservations()
   await store.loadTables()
+  await store.loadCustomers()
 })
 
 const todayReservations = computed(() => {
   const today = new Date().toISOString().split('T')[0]
-  return store.reservations.filter(r => r.date === today || r.status === 'pendiente')
+  return store.reservations.filter(r => r.fecha_reserva === today || r.estado === 'pendiente')
 })
 </script>
 
@@ -213,7 +248,7 @@ const todayReservations = computed(() => {
           <p class="stat-value">{{ tableStats.total }}</p>
         </div>
         <div class="stat-card">
-          <p class="stat-label">Disponibles</p>
+          <p class="stat-label">Libres</p>
           <p class="stat-value stat-success">{{ tableStats.available }}</p>
         </div>
         <div class="stat-card">
@@ -221,7 +256,7 @@ const todayReservations = computed(() => {
           <p class="stat-value stat-danger">{{ tableStats.occupied }}</p>
         </div>
         <div class="stat-card">
-          <p class="stat-label">Reservadas</p>
+          <p class="stat-label">Mantenimiento</p>
           <p class="stat-value stat-warning">{{ tableStats.reserved }}</p>
         </div>
       </div>
@@ -233,31 +268,25 @@ const todayReservations = computed(() => {
           <div
             v-for="table in store.tables"
             :key="table.id"
-            :class="['table-card', `table-card-${table.status}`]"
+            :class="['table-card', `table-card-${table.estado}`]"
           >
             <!-- Table Number -->
             <div class="table-visual">
-              <div :class="['table-number', `table-number-${table.status}`]">
-                {{ table.number }}
+              <div :class="['table-number', `table-number-${table.estado}`]">
+                {{ table.numero }}
               </div>
             </div>
             
             <!-- Table Info -->
             <div class="table-info">
-              <p class="table-name">Mesa {{ table.number }}</p>
+              <p class="table-name">Mesa {{ table.numero }}</p>
               <div class="table-capacity">
                 <span class="material-symbols-outlined">group</span>
-                {{ table.capacity }} personas
+                {{ table.capacidad }} personas
               </div>
-              <span :class="['badge', getStatusInfo(table.status).badgeClass]">
-                {{ getStatusInfo(table.status).label }}
+              <span :class="['badge', getStatusInfo(table.estado).badgeClass]">
+                {{ getStatusInfo(table.estado).label }}
               </span>
-            </div>
-            
-            <!-- Reservation Info -->
-            <div v-if="table.reservation" class="table-reservation">
-              <p class="reservation-name">{{ table.reservation.name }}</p>
-              <p class="reservation-detail">{{ table.reservation.time }} - {{ table.reservation.guests }} personas</p>
             </div>
           </div>
         </div>
@@ -266,7 +295,7 @@ const todayReservations = computed(() => {
         <div class="tables-legend">
           <div class="legend-item">
             <span class="legend-dot legend-dot-success"></span>
-            <span>Disponible</span>
+            <span>Libre</span>
           </div>
           <div class="legend-item">
             <span class="legend-dot legend-dot-danger"></span>
@@ -274,7 +303,7 @@ const todayReservations = computed(() => {
           </div>
           <div class="legend-item">
             <span class="legend-dot legend-dot-warning"></span>
-            <span>Reservada</span>
+            <span>Mantenimiento</span>
           </div>
         </div>
       </div>
@@ -294,28 +323,42 @@ const todayReservations = computed(() => {
             </thead>
             <tbody>
               <tr v-for="table in store.tables" :key="table.id">
-                <td class="cell-bold">Mesa {{ table.number }}</td>
-                <td class="cell-muted">{{ table.capacity }} personas</td>
+                <td class="cell-bold">Mesa {{ table.numero }}</td>
+                <td class="cell-muted">{{ table.capacidad }} personas</td>
                 <td>
-                  <span :class="['badge', getStatusInfo(table.status).badgeClass]">
-                    {{ getStatusInfo(table.status).label }}
+                  <span :class="['badge', getStatusInfo(table.estado).badgeClass]">
+                    {{ getStatusInfo(table.estado).label }}
                   </span>
                 </td>
                 <td>
                   <div class="action-buttons">
-                    <button 
-                      @click="updateTableStatus(table.id, 'available')"
-                      :disabled="table.status === 'available'"
-                      :class="['action-btn', table.status === 'available' ? 'action-btn-active-success' : '']"
+                    <button
+                      @click="updateTableStatus(table.id, 'libre')"
+                      :disabled="table.estado === 'libre'"
+                      :class="['action-btn', table.estado === 'libre' ? 'action-btn-active-success' : '']"
                     >
                       Liberar
                     </button>
-                    <button 
-                      @click="updateTableStatus(table.id, 'occupied')"
-                      :disabled="table.status === 'occupied'"
-                      :class="['action-btn', table.status === 'occupied' ? 'action-btn-active-danger' : '']"
+                    <button
+                      @click="updateTableStatus(table.id, 'ocupada')"
+                      :disabled="table.estado === 'ocupada'"
+                      :class="['action-btn', table.estado === 'ocupada' ? 'action-btn-active-danger' : '']"
                     >
                       Ocupar
+                    </button>
+                    <button
+                      @click="updateTableStatus(table.id, 'mantenimiento')"
+                      :disabled="table.estado === 'mantenimiento'"
+                      :class="['action-btn', table.estado === 'mantenimiento' ? 'action-btn-active-warning' : '']"
+                    >
+                      Mantenimiento
+                    </button>
+                    <button
+                      v-if="isAdmin"
+                      @click="deleteTable(table.id)"
+                      class="action-btn action-btn-delete"
+                    >
+                      Eliminar
                     </button>
                   </div>
                 </td>
@@ -338,32 +381,32 @@ const todayReservations = computed(() => {
             class="reservation-card"
           >
             <div class="reservation-left">
-              <div class="reservation-avatar">{{ reservation.name.charAt(0) }}</div>
+              <div class="reservation-avatar">{{ (reservation.cliente_nombre || 'N').charAt(0) }}</div>
               <div class="reservation-info">
-                <p class="reservation-name">{{ reservation.name }}</p>
+                <p class="reservation-name">{{ reservation.cliente_nombre || 'Sin nombre' }}</p>
                 <div class="reservation-details">
-                  <span class="detail-item">
+                  <span v-if="reservation.cliente_telefono" class="detail-item">
                     <span class="material-symbols-outlined">call</span>
-                    {{ reservation.phone }}
+                    {{ reservation.cliente_telefono }}
                   </span>
                   <span class="detail-item">
                     <span class="material-symbols-outlined">group</span>
-                    {{ reservation.guests }} personas
+                    {{ reservation.cantidad_personas }} personas
                   </span>
                   <span class="detail-item">
                     <span class="material-symbols-outlined">schedule</span>
-                    {{ reservation.date }} - {{ reservation.time }}
+                    {{ reservation.fecha_reserva }} - {{ reservation.hora_reserva }}
                   </span>
                 </div>
-                <p v-if="reservation.notes" class="reservation-notes">{{ reservation.notes }}</p>
+                <p v-if="reservation.observaciones" class="reservation-notes">{{ reservation.observaciones }}</p>
               </div>
             </div>
             
             <div class="reservation-right">
-              <span :class="['badge', getReservationStatusInfo(reservation.status).badgeClass]">
-                {{ getReservationStatusInfo(reservation.status).label }}
+              <span :class="['badge', getReservationStatusInfo(reservation.estado).badgeClass]">
+                {{ getReservationStatusInfo(reservation.estado).label }}
               </span>
-              <div v-if="reservation.status === 'pending'" class="reservation-actions">
+              <div v-if="reservation.estado === 'pendiente'" class="reservation-actions">
                 <button @click="confirmReservation(reservation.id)" class="btn btn-primary btn-sm">
                   Confirmar
                 </button>
@@ -371,8 +414,8 @@ const todayReservations = computed(() => {
                   Cancelar
                 </button>
               </div>
-              <div v-if="reservation.table" class="reservation-table">
-                Mesa {{ reservation.table }}
+              <div v-if="reservation.mesa_numero" class="reservation-table">
+                Mesa {{ reservation.mesa_numero }}
               </div>
             </div>
           </div>
@@ -399,24 +442,13 @@ const todayReservations = computed(() => {
 
           <form @submit.prevent="saveTable" class="modal-form">
             <div class="form-group">
-              <label class="form-label">Nombre de la Mesa</label>
-              <input v-model="tableForm.nombre" type="text" class="input" placeholder="A1, B2, Terraza" required />
+              <label class="form-label">Numero de Mesa</label>
+              <input v-model="tableForm.numero" type="text" class="input" placeholder="1, 2, A1, Terraza" required />
             </div>
 
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">Capacidad</label>
-                <input v-model="tableForm.capacidad" type="number" min="1" class="input" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Ubicación</label>
-                <input v-model="tableForm.ubicacion" type="text" class="input" placeholder="Interior, Terraza" />
-              </div>
-            </div>
-
-            <div class="form-checkbox">
-              <input v-model="tableForm.activa" type="checkbox" id="table-active" />
-              <label for="table-active">Mesa activa</label>
+            <div class="form-group">
+              <label class="form-label">Capacidad</label>
+              <input v-model="tableForm.capacidad" type="number" min="1" class="input" required />
             </div>
 
             <div class="modal-actions">
@@ -441,51 +473,54 @@ const todayReservations = computed(() => {
           </div>
           
           <form @submit.prevent="saveReservation" class="modal-form">
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">Nombre del Cliente</label>
-                <input v-model="reservationForm.name" type="text" class="input" placeholder="Nombre completo" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Correo</label>
-                <input v-model="reservationForm.email" type="email" class="input" placeholder="correo@ejemplo.com" />
+            <div class="form-group">
+              <label class="form-label">Cliente</label>
+              <div class="customer-selector">
+                <select v-if="!showNewCustomerForm" v-model="reservationForm.cliente_id" class="input">
+                  <option value="">Sin cliente</option>
+                  <option v-for="customer in store.customers" :key="customer.id" :value="customer.id">
+                    {{ customer.nombre }} ({{ customer.telefono }})
+                  </option>
+                </select>
+                <div v-else class="new-customer-form">
+                  <input v-model="newCustomerForm.nombre" type="text" class="input" placeholder="Nombre" />
+                  <input v-model="newCustomerForm.telefono" type="text" class="input" placeholder="Telefono" />
+                  <input v-model="newCustomerForm.email" type="email" class="input" placeholder="Email (opcional)" />
+                  <button type="button" @click="createNewCustomer" class="btn btn-primary btn-sm">Crear</button>
+                  <button type="button" @click="showNewCustomerForm = false" class="btn btn-secondary btn-sm">Cancelar</button>
+                </div>
+                <button v-if="!showNewCustomerForm" type="button" @click="showNewCustomerForm = true" class="btn btn-secondary btn-sm">+ Nuevo</button>
               </div>
             </div>
 
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">Telefono</label>
-                <input v-model="reservationForm.phone" type="tel" class="input" placeholder="555-1234" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Mesa</label>
-                <select v-model="reservationForm.tableId" class="input" required>
-                  <option value="" disabled>Selecciona una mesa</option>
-                  <option v-for="table in store.tables" :key="table.id" :value="table.id">
-                    {{ table.number }} ({{ table.capacity }} personas)
-                  </option>
-                </select>
-              </div>
+            <div class="form-group">
+              <label class="form-label">Mesa</label>
+              <select v-model="reservationForm.mesa_id" class="input" required>
+                <option value="" disabled>Selecciona una mesa</option>
+                <option v-for="table in store.tables" :key="table.id" :value="table.id">
+                  Mesa {{ table.numero }} ({{ table.capacidad }} personas)
+                </option>
+              </select>
             </div>
 
             <div class="form-row-3">
               <div class="form-group">
                 <label class="form-label">Personas</label>
-                <input v-model="reservationForm.guests" type="number" min="1" max="20" class="input" required />
+                <input v-model="reservationForm.cantidad_personas" type="number" min="1" max="20" class="input" required />
               </div>
               <div class="form-group">
                 <label class="form-label">Fecha</label>
-                <input v-model="reservationForm.date" type="date" class="input" required />
+                <input v-model="reservationForm.fecha_reserva" type="date" class="input" required />
               </div>
               <div class="form-group">
                 <label class="form-label">Hora</label>
-                <input v-model="reservationForm.time" type="time" class="input" required />
+                <input v-model="reservationForm.hora_reserva" type="time" class="input" required />
               </div>
             </div>
 
             <div class="form-group">
               <label class="form-label">Notas</label>
-              <textarea v-model="reservationForm.notes" class="input textarea" placeholder="Ocasion especial, preferencias, etc."></textarea>
+              <textarea v-model="reservationForm.observaciones" class="input textarea" placeholder="Ocasion especial, preferencias, etc."></textarea>
             </div>
             
             <div class="modal-actions">
@@ -506,7 +541,6 @@ const todayReservations = computed(() => {
   gap: 1.5rem;
 }
 
-/* Page Header */
 .page-header {
   display: flex;
   flex-direction: column;
@@ -533,7 +567,6 @@ const todayReservations = computed(() => {
   color: var(--on-surface-variant);
 }
 
-/* Tabs */
 .tabs {
   display: flex;
   gap: 0.5rem;
@@ -562,14 +595,12 @@ const todayReservations = computed(() => {
   border-bottom-color: var(--primary);
 }
 
-/* Tables Content */
 .tables-content {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
 }
 
-/* Stats Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -604,7 +635,6 @@ const todayReservations = computed(() => {
 .stat-danger { color: var(--danger); }
 .stat-warning { color: var(--warning); }
 
-/* Tables Grid */
 .tables-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -639,21 +669,21 @@ const todayReservations = computed(() => {
   transition: all var(--transition-base);
 }
 
-.table-card-available {
+.table-card-libre {
   border-color: rgba(34, 197, 94, 0.5);
   background: rgba(34, 197, 94, 0.05);
 }
 
-.table-card-available:hover {
+.table-card-libre:hover {
   background: rgba(34, 197, 94, 0.1);
 }
 
-.table-card-occupied {
+.table-card-ocupada {
   border-color: rgba(239, 68, 68, 0.5);
   background: rgba(239, 68, 68, 0.05);
 }
 
-.table-card-reserved {
+.table-card-mantenimiento {
   border-color: rgba(245, 158, 11, 0.5);
   background: rgba(245, 158, 11, 0.05);
 }
@@ -675,17 +705,17 @@ const todayReservations = computed(() => {
   font-weight: 700;
 }
 
-.table-number-available {
+.table-number-libre {
   background: rgba(34, 197, 94, 0.2);
   color: var(--success);
 }
 
-.table-number-occupied {
+.table-number-ocupada {
   background: rgba(239, 68, 68, 0.2);
   color: var(--danger);
 }
 
-.table-number-reserved {
+.table-number-mantenimiento {
   background: rgba(245, 158, 11, 0.2);
   color: var(--warning);
 }
@@ -717,25 +747,6 @@ const todayReservations = computed(() => {
   font-size: 0.875rem;
 }
 
-.table-reservation {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--outline-variant);
-  text-align: center;
-}
-
-.table-reservation .reservation-name {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--on-surface);
-}
-
-.table-reservation .reservation-detail {
-  font-size: 0.625rem;
-  color: var(--on-surface-variant);
-}
-
-/* Legend */
 .tables-legend {
   display: flex;
   align-items: center;
@@ -764,7 +775,6 @@ const todayReservations = computed(() => {
 .legend-dot-danger { background: var(--danger); }
 .legend-dot-warning { background: var(--warning); }
 
-/* Data Table */
 .table-container {
   overflow-x: auto;
   margin-top: 1rem;
@@ -839,10 +849,28 @@ const todayReservations = computed(() => {
 
 .action-btn-active-danger {
   background: rgba(239, 68, 68, 0.2);
-  color: var(--danger);
+  color: var(--error);
 }
 
-/* Reservations */
+.action-btn-active-warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.action-btn-delete {
+  color: var(--error);
+}
+
+.action-btn-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .reservations-content {
   display: flex;
   flex-direction: column;
@@ -950,7 +978,6 @@ const todayReservations = computed(() => {
   color: var(--on-surface-variant);
 }
 
-/* Empty State */
 .empty-state {
   text-align: center;
   padding: 3rem;
@@ -966,7 +993,6 @@ const todayReservations = computed(() => {
   color: var(--on-surface-variant);
 }
 
-/* Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -1021,7 +1047,6 @@ const todayReservations = computed(() => {
   color: var(--on-surface);
 }
 
-/* Form */
 .modal-form {
   display: flex;
   flex-direction: column;
@@ -1063,7 +1088,6 @@ const todayReservations = computed(() => {
   flex: 1;
 }
 
-/* Badges */
 .badge {
   display: inline-flex;
   padding: 0.25rem 0.5rem;
@@ -1089,7 +1113,16 @@ const todayReservations = computed(() => {
   color: var(--danger);
 }
 
-/* Buttons */
+.badge-info {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.badge-muted {
+  background: rgba(112, 121, 117, 0.15);
+  color: var(--outline);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1134,7 +1167,6 @@ const todayReservations = computed(() => {
   font-size: 0.625rem;
 }
 
-/* Card */
 .card {
   background: var(--surface-container-lowest);
   border: 1px solid var(--outline-variant);
@@ -1147,7 +1179,6 @@ const todayReservations = computed(() => {
   color: var(--on-surface);
 }
 
-/* Input */
 .input {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -1166,5 +1197,30 @@ const todayReservations = computed(() => {
 
 .input::placeholder {
   color: var(--outline);
+}
+
+.customer-selector {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.customer-selector .input {
+  flex: 1;
+}
+
+.new-customer-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.new-customer-form .input {
+  width: 100%;
+}
+
+.new-customer-form button {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.625rem;
 }
 </style>

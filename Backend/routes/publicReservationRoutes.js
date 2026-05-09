@@ -1,37 +1,46 @@
 const express = require("express")
 const router = express.Router()
 const {
-  getAvailableTables,
+  getAvailableTablesForReservation,
   createCustomer,
   createReservation
 } = require("../models/reservationModels")
+const { createCustomer: createCustomerModel } = require("../models/customerModels")
 
 router.post("/", async (req, res) => {
   const {
     nombre,
     telefono,
-    correo = null,
-    fecha,
-    hora,
-    personas,
-    notas = null
+    email = null,
+    mesa_id,
+    fecha_reserva,
+    hora_reserva,
+    cantidad_personas,
+    observaciones = null
   } = req.body
 
-  if (!nombre || !telefono || !fecha || !hora || !personas) {
-    return res.status(400).json({ message: "Los campos nombre, telefono, fecha, hora y personas son obligatorios" })
+  if (!nombre || !telefono || !mesa_id || !fecha_reserva || !hora_reserva || !cantidad_personas) {
+    return res.status(400).json({ message: "Los campos nombre, telefono, mesa, fecha, hora y personas son obligatorios" })
   }
 
   try {
-    const tables = await getAvailableTables(fecha, hora)
-    const suitableTable = tables.find(t => Number(t.capacidad) >= Number(personas))
+    const clienteResult = await createCustomerModel(nombre, telefono, email)
+    const clienteId = clienteResult.insertId
 
-    if (!suitableTable) {
-      return res.status(400).json({ message: "No hay mesas disponibles para esa cantidad de personas" })
-    }
+    const reservationResult = await createReservation(
+      clienteId,
+      mesa_id,
+      cantidad_personas,
+      fecha_reserva,
+      hora_reserva,
+      'pendiente',
+      observaciones
+    )
 
-    const clienteId = await createCustomer(nombre, telefono, correo)
-    await createReservation(clienteId, suitableTable.id, fecha, hora, personas, "pendiente", notas)
-    res.status(201).json({ message: "Reservacion creada correctamente", mesa: suitableTable.numero })
+    res.status(201).json({
+      message: "Reservacion creada correctamente",
+      id: reservationResult.insertId
+    })
   } catch (error) {
     console.error(error)
     res.status(500).json({ message: "Error al crear la reservacion" })

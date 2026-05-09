@@ -40,8 +40,8 @@ const stats = computed(() => {
   const preparingOrders = store.orders.filter(order => order.status === 'preparing').length
   const readyOrders = store.orders.filter(order => order.status === 'ready').length
   const avgTicket = ordersToday ? store.orders.reduce((sum, order) => sum + Number(order.total), 0) / ordersToday : 0
-  const occupiedTables = store.tables.filter(table => table.status !== 'available').length
-  const availableTables = store.tables.filter(table => table.status === 'available').length
+  const occupiedTables = store.tables.filter(table => table.estado !== 'libre').length
+  const availableTables = store.tables.filter(table => table.estado === 'libre').length
 
   const weeklyData = store.salesData.weekly
   const todaySalesNum = weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].sales : 0
@@ -128,12 +128,13 @@ const lineChartOptions = {
 }
 
 const doughnutChartData = computed(() => {
-  const data = store.salesData.categories.map(c => c.value)
+  const data = store.salesData.topProducts.slice(0, 4).map(p => p.value)
+  const labels = store.salesData.topProducts.slice(0, 4).map(p => p.name)
   const hasData = data.some(v => v > 0)
   return {
-    labels: store.salesData.categories.map(c => c.name),
+    labels: hasData ? labels : ['Sin datos', '', '', ''],
     datasets: [{
-      data: hasData ? data : [1, 1, 1, 1],
+      data: hasData ? data : [1, 0, 0, 0],
       backgroundColor: hasData
         ? ['#00342b', '#22c55e', '#3b82f6', '#f59e0b']
         : ['#e8ede9', '#e8ede9', '#e8ede9', '#e8ede9'],
@@ -296,9 +297,9 @@ onMounted(async () => {
         <div class="orders-list">
           <div v-for="order in recentOrders" :key="order.id" class="order-item">
             <div class="order-left">
-              <div class="order-table-badge">{{ order.table }}</div>
+              <div class="order-table-badge">{{ order.mesa_numero || order.mesa_id }}</div>
               <div class="order-info">
-                <p class="order-title">Mesa {{ order.table }}</p>
+                <p class="order-title">Mesa {{ order.mesa_numero || order.mesa_id }}</p>
                 <p class="order-meta">{{ order.items.length }} items - {{ order.time }}</p>
               </div>
             </div>
@@ -351,7 +352,7 @@ onMounted(async () => {
             </RouterLink>
             <RouterLink to="/employees" class="action-btn">
               <span class="material-symbols-outlined">person_add</span>
-              Empleados
+              Usuarios
             </RouterLink>
           </div>
         </div>

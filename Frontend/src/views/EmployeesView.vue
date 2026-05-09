@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useUsersStore } from '@/stores/users'
+import { useAuthStore } from '@/stores/auth'
 import { apiFetch } from '@/utils/api'
 
 const usersStore = useUsersStore()
+const authStore = useAuthStore()
 
 const searchQuery = ref('')
 const selectedRole = ref('all')
@@ -13,7 +15,8 @@ const editingEmployee = ref(null)
 const roles = [
   { value: 'all', label: 'Todos' },
   { value: 'admin', label: 'Administrador' },
-  { value: 'camarero', label: 'Camarero' },
+  { value: 'cajero', label: 'Cajero' },
+  { value: 'mesero', label: 'Mesero' },
   { value: 'cocina', label: 'Cocina' }
 ]
 
@@ -21,7 +24,7 @@ const formData = ref({
   firstName: '',
   lastName: '',
   email: '',
-  rol: 'camarero',
+  rol: 'mesero',
   status: 'active',
   password: ''
 })
@@ -29,7 +32,10 @@ const formData = ref({
 const employees = computed(() => {
   return usersStore.users.map(user => ({
     ...user,
-    status: user.active ? 'active' : 'inactive'
+    firstName: user.nombre,
+    lastName: user.apellido,
+    active: user.activo,
+    status: user.activo ? 'active' : 'inactive'
   }))
 })
 
@@ -47,7 +53,8 @@ const filteredEmployees = computed(() => {
 const getRoleInfo = (role) => {
   const info = {
     admin: { label: 'Administrador', color: 'badge-primary' },
-    camarero: { label: 'Camarero', color: 'badge-success' },
+    cajero: { label: 'Cajero', color: 'badge-success' },
+    mesero: { label: 'Mesero', color: 'badge-info' },
     cocina: { label: 'Cocina', color: 'badge-warning' }
   }
   return info[role] || { label: role, color: '' }
@@ -57,15 +64,21 @@ const stats = computed(() => ({
   total: employees.value.length,
   active: employees.value.filter(e => e.status === 'active').length,
   admins: employees.value.filter(e => e.rol === 'admin').length,
-  camareros: employees.value.filter(e => e.rol === 'camarero').length,
+  cajeros: employees.value.filter(e => e.rol === 'cajero').length,
+  meseros: employees.value.filter(e => e.rol === 'mesero').length,
   cocina: employees.value.filter(e => e.rol === 'cocina').length
 }))
 
 const loadEmployees = async () => {
+  console.log('Loading users...')
   await usersStore.fetchUsers()
+  console.log('Users loaded:', usersStore.users.length, usersStore.users)
 }
 
-onMounted(loadEmployees)
+onMounted(() => {
+  console.log('EmployeesView mounted, user:', authStore.user)
+  loadEmployees()
+})
 
 const openAddModal = () => {
   editingEmployee.value = null
@@ -73,7 +86,7 @@ const openAddModal = () => {
     firstName: '',
     lastName: '',
     email: '',
-    rol: 'camarero',
+    rol: 'mesero',
     status: 'active',
     password: ''
   }
@@ -102,20 +115,20 @@ const saveEmployee = async () => {
   const payload = {
     nombre: formData.value.firstName,
     apellido: formData.value.lastName,
-    correo: formData.value.email,
+    email: formData.value.email,
     rol: formData.value.rol,
     activo: formData.value.status === 'active'
   }
 
   try {
     if (editingEmployee.value) {
-      await apiFetch(`http://localhost:3000/api/users/${editingEmployee.value.id}`, {
+      await apiFetch(`/api/users/${editingEmployee.value.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
     } else {
-      await apiFetch('http://localhost:3000/api/users', {
+      await apiFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,20 +141,20 @@ const saveEmployee = async () => {
     await loadEmployees()
     closeModal()
   } catch (error) {
-    console.error('Error guardando empleado:', error)
-    alert(error.message || 'Error al guardar empleado')
+    console.error('Error guardando usuario:', error)
+    alert(error.message || 'Error al guardar usuario')
   }
 }
 
 const toggleStatus = async (employee) => {
   try {
-    await apiFetch(`http://localhost:3000/api/users/${employee.id}`, {
+    await apiFetch(`/api/users/${employee.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         nombre: employee.firstName,
         apellido: employee.lastName,
-        correo: employee.email,
+        email: employee.email,
         rol: employee.rol,
         activo: !employee.active
       })
@@ -153,6 +166,22 @@ const toggleStatus = async (employee) => {
     alert(error.message || 'Error al cambiar estado')
   }
 }
+
+const deleteUser = async (employee) => {
+  if (!confirm(`¿Estas seguro de eliminar al usuario "${employee.firstName} ${employee.lastName}"?`)) {
+    return
+  }
+
+  try {
+    await apiFetch(`/api/users/${employee.id}`, {
+      method: 'DELETE'
+    })
+    await loadEmployees()
+  } catch (error) {
+    console.error('Error eliminando usuario:', error)
+    alert(error.message || 'Error al eliminar usuario')
+  }
+}
 </script>
 
 <template>
@@ -160,12 +189,12 @@ const toggleStatus = async (employee) => {
     <!-- Header -->
     <div class="page-header">
       <div class="header-info">
-        <h1 class="page-title">Gestion de Empleados</h1>
-        <p class="page-subtitle">Administra el equipo de trabajo</p>
+        <h1 class="page-title">Gestion de Usuarios</h1>
+        <p class="page-subtitle">Administra los usuarios del sistema</p>
       </div>
       <button @click="openAddModal" class="btn btn-primary">
         <span class="material-symbols-outlined">person_add</span>
-        Agregar Empleado
+        Agregar Usuario
       </button>
     </div>
     
@@ -184,8 +213,8 @@ const toggleStatus = async (employee) => {
         <p class="stat-value stat-primary">{{ stats.admins }}</p>
       </div>
       <div class="stat-card">
-        <p class="stat-label">Camareros</p>
-        <p class="stat-value">{{ stats.camareros }}</p>
+        <p class="stat-label">Cajeros</p>
+        <p class="stat-value">{{ stats.cajeros }}</p>
       </div>
       <div class="stat-card">
         <p class="stat-label">Cocina</p>
@@ -256,9 +285,16 @@ const toggleStatus = async (employee) => {
             <button @click="openEditModal(employee)" class="action-icon" title="Editar">
               <span class="material-symbols-outlined">edit</span>
             </button>
-            <button 
-              @click="toggleStatus(employee)" 
-              :class="['action-icon', employee.active === true ? 'action-icon-danger' : 'action-icon-success']"
+            <button
+              @click="deleteUser(employee)"
+              class="action-icon action-icon-danger"
+              title="Eliminar"
+            >
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+            <button
+              @click="toggleStatus(employee)"
+              :class="['action-icon', employee.active === true ? 'action-icon-warning' : 'action-icon-success']"
               :title="employee.active === true ? 'Desactivar' : 'Activar'"
             >
               <span class="material-symbols-outlined">{{ employee.active === true ? 'block' : 'check_circle' }}</span>
@@ -271,7 +307,7 @@ const toggleStatus = async (employee) => {
     <!-- Empty state -->
     <div v-if="filteredEmployees.length === 0" class="card empty-state">
       <span class="material-symbols-outlined empty-icon">groups</span>
-      <p>No se encontraron empleados</p>
+      <p>No se encontraron usuarios</p>
     </div>
     
     <!-- Table View -->
@@ -281,7 +317,7 @@ const toggleStatus = async (employee) => {
         <table class="data-table">
           <thead>
             <tr>
-              <th>Empleado</th>
+              <th>Usuario</th>
               <th>Email</th>
               <th>Rol</th>
               <th>Estado</th>
@@ -316,9 +352,15 @@ const toggleStatus = async (employee) => {
                   <button @click="openEditModal(employee)" class="btn btn-secondary btn-sm">
                     Editar
                   </button>
-                  <button 
-                    @click="toggleStatus(employee)" 
-                    :class="employee.status === 'active' ? 'btn btn-danger btn-sm' : 'btn btn-primary btn-sm'"
+                  <button
+                    @click="deleteUser(employee)"
+                    class="btn btn-danger btn-sm"
+                  >
+                    Eliminar
+                  </button>
+                  <button
+                    @click="toggleStatus(employee)"
+                    :class="employee.status === 'active' ? 'btn btn-warning btn-sm' : 'btn btn-primary btn-sm'"
                   >
                     {{ employee.status === 'active' ? 'Desactivar' : 'Activar' }}
                   </button>
@@ -337,7 +379,7 @@ const toggleStatus = async (employee) => {
         <div class="modal-content">
           <div class="modal-header">
             <h2 class="modal-title">
-              {{ editingEmployee ? 'Editar Empleado' : 'Nuevo Empleado' }}
+              {{ editingEmployee ? 'Editar Usuario' : 'Nuevo Usuario' }}
             </h2>
             <button @click="closeModal" class="modal-close">
               <span class="material-symbols-outlined">close</span>
@@ -364,9 +406,10 @@ const toggleStatus = async (employee) => {
               <div class="form-group">
                 <label class="form-label">Rol</label>
                 <select v-model="formData.rol" class="input">
-                  <option v-for="role in roles.slice(1)" :key="role.value" :value="role.value">
-                    {{ role.label }}
-                  </option>
+                  <option value="admin">Administrador</option>
+                  <option value="cajero">Cajero</option>
+                  <option value="mesero">Mesero</option>
+                  <option value="cocina">Cocina</option>
                 </select>
               </div>
             </div>
@@ -388,13 +431,13 @@ const toggleStatus = async (employee) => {
                 true-value="active"
                 false-value="inactive"
               />
-              <label for="status">Empleado activo</label>
+              <label for="status">Usuario activo</label>
             </div>
             
             <div class="modal-actions">
               <button type="button" @click="closeModal" class="btn btn-secondary">Cancelar</button>
               <button type="submit" class="btn btn-primary">
-                {{ editingEmployee ? 'Guardar Cambios' : 'Agregar Empleado' }}
+                {{ editingEmployee ? 'Guardar Cambios' : 'Agregar Usuario' }}
               </button>
             </div>
           </form>
@@ -612,6 +655,16 @@ const toggleStatus = async (employee) => {
   color: var(--warning);
 }
 
+.employee-avatar-cajero {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.employee-avatar-mesero {
+  background: rgba(168, 85, 247, 0.2);
+  color: #a855f7;
+}
+
 .employee-info {
   flex: 1;
   min-width: 0;
@@ -694,7 +747,11 @@ const toggleStatus = async (employee) => {
 }
 
 .action-icon-danger:hover {
-  color: var(--danger);
+  color: var(--error);
+}
+
+.action-icon-warning:hover {
+  color: #f59e0b;
 }
 
 .action-icon-success:hover {
@@ -793,6 +850,16 @@ const toggleStatus = async (employee) => {
 .mini-avatar-cocina {
   background: rgba(245, 158, 11, 0.2);
   color: var(--warning);
+}
+
+.mini-avatar-cajero {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.mini-avatar-mesero {
+  background: rgba(168, 85, 247, 0.2);
+  color: #a855f7;
 }
 
 .cell-name {
@@ -990,6 +1057,11 @@ const toggleStatus = async (employee) => {
 
 .btn-danger {
   background: var(--error);
+  color: white;
+}
+
+.btn-warning {
+  background: #f59e0b;
   color: white;
 }
 
