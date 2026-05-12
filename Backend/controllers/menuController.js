@@ -1,5 +1,5 @@
 const multer = require("multer")
-const path = require("path")
+const imagekit = require("../config/imagekit")
 const {
   getCategories,
   findCategoryById,
@@ -16,19 +16,8 @@ const {
   getProductsByCategory
 } = require("../models/menuModels")
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, "..", "uploads", "menu"))
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now()
-    const sanitized = file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")
-    cb(null, `${timestamp}_${sanitized}`)
-  }
-})
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
     if (!file.mimetype.startsWith("image/")) {
       return cb(new Error("Solo se permiten imagenes"), false)
@@ -43,22 +32,7 @@ const upload = multer({
 const getMenu = async (req, res) => {
   try {
     const items = await getProducts()
-    const baseUrl = `${req.protocol}://${req.get("host")}`
-    const mapped = items.map((item) => {
-      if (!item.imagen_url) {
-        return { ...item, imagen_url: null }
-      }
-      const uploadsIndex = item.imagen_url.indexOf("/uploads/")
-      if (uploadsIndex !== -1) {
-        const relativePath = item.imagen_url.substring(uploadsIndex)
-        return { ...item, imagen_url: `${baseUrl}${relativePath}` }
-      }
-      if (item.imagen_url.startsWith("/")) {
-        return { ...item, imagen_url: `${baseUrl}${item.imagen_url}` }
-      }
-      return { ...item, imagen_url: item.imagen_url }
-    })
-    res.json(mapped)
+    res.json(items)
   } catch (error) {
     console.error("Error al recuperar el menu:", error)
     res.status(500).json({ message: "Error al recuperar el menu" })
@@ -193,9 +167,23 @@ const uploadImage = async (req, res) => {
     return res.status(400).json({ message: "No se recibio ningun archivo" })
   }
 
-  const imagePath = `/uploads/menu/${req.file.filename}`
-  const imageUrl = `${req.protocol}://${req.get("host")}${imagePath}`
-  res.status(201).json({ imageUrl, path: imagePath })
+  try {
+    const result = await imagekit.upload({
+      file: req.file.buffer,
+      fileName: `${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_")}`,
+      folder: "/RestauranteSS/menu",
+      useUniqueFileName: false
+    })
+
+    res.status(201).json({
+      imageUrl: result.url,
+      path: result.url,
+      fileId: result.fileId
+    })
+  } catch (error) {
+    console.error("Error al subir imagen a ImageKit:", error)
+    res.status(500).json({ message: "Error al subir la imagen" })
+  }
 }
 
 module.exports = {
