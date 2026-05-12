@@ -36,9 +36,9 @@ export interface Order {
   mesero_nombre: string | null
   estado_servicio: string
   estado_pago: string
+  metodo_pago: string | null
   observaciones: string | null
   subtotal: number
-  impuesto: number
   total: number
   time: string
   creado_en: string

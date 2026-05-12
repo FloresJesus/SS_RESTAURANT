@@ -307,7 +307,7 @@ const deleteCustomer = async (customer) => {
               </div>
               <div class="form-group">
                 <label class="form-label">Teléfono</label>
-                <input v-model="formData.telefono" type="tel" class="input" placeholder="555-123-4567" required />
+                <input v-model="formData.telefono" type="tel" class="input" placeholder="+591 69999999" required />
               </div>
             </div>
 

@@ -43,7 +43,7 @@ const processPayment = async (req, res) => {
        WHERE pedido_id = ?`,
       [pedido_id]
     )
-    const orderTotal = parseFloat(details[0].total) * 1.13
+    const orderTotal = parseFloat(details[0].total)
 
     if (monto < orderTotal * 0.5) {
       console.warn(`Advertencia: El monto ${monto} es menor al total esperado ${orderTotal}`)
@@ -124,12 +124,10 @@ const processPayment = async (req, res) => {
           )
           const numeroFactura = `${year}-${String(maxNum[0].siguiente).padStart(6, '0')}`
           const subtotal = parseFloat(details[0].total)
-          const impuesto = parseFloat((subtotal * 0.13).toFixed(2))
-          const totalFactura = subtotal + impuesto
           await connection.query(
             `INSERT INTO factura (pedido_id, numero_factura, nit_ci, razon_social, subtotal, impuesto, total)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [pedido_id, numeroFactura, nit_ci, razon_social, subtotal, impuesto, totalFactura]
+             VALUES (?, ?, ?, ?, ?, 0, ?)`,
+            [pedido_id, numeroFactura, nit_ci, razon_social, subtotal, subtotal]
           )
         }
         const [invoice] = await connection.query(

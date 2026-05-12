@@ -57,10 +57,10 @@ const getAllOrders = async (req, res) => {
       mesero_nombre: order.mesero_nombre ? `${order.mesero_nombre} ${order.mesero_apellido || ""}`.trim() : null,
       estado_servicio: order.estado_servicio,
       estado_pago: order.estado_pago,
+      metodo_pago: order.metodo_pago,
       observaciones: order.observaciones,
       subtotal: order.subtotal,
-      impuesto: parseFloat((order.subtotal * 0.13).toFixed(2)),
-      total: parseFloat((order.subtotal * 1.13).toFixed(2)),
+      total: order.subtotal,
       time: new Date(order.creado_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
       creado_en: order.creado_en,
       status: mapServiceStatus(order.estado_servicio),
@@ -98,8 +98,7 @@ const getOrderById = async (req, res) => {
     res.json({
       ...order,
       subtotal,
-      impuesto: parseFloat((subtotal * 0.13).toFixed(2)),
-      total: parseFloat((subtotal * 1.13).toFixed(2)),
+      total: subtotal,
       status: mapServiceStatus(order.estado_servicio),
       items: details.map((d) => ({
         id: d.id,
@@ -119,7 +118,7 @@ const getOrderById = async (req, res) => {
 }
 
 const createNewOrder = async (req, res) => {
-  const { mesa_id, cliente_id = null, reserva_id = null, mesero_id, items = [], observaciones = null } = req.body
+  const { mesa_id, cliente_id = null, reserva_id = null, mesero_id, items = [], observaciones = null, metodo_pago = null } = req.body
 
   if (!mesa_id || !mesero_id) {
     return res.status(400).json({ message: "Mesa y mesero son obligatorios" })
@@ -149,6 +148,7 @@ const createNewOrder = async (req, res) => {
     )
     const orderId = result.insertId
 
+    let total = 0
     for (const item of items) {
       if (!item.producto_id || !item.cantidad) continue
 
@@ -160,11 +160,27 @@ const createNewOrder = async (req, res) => {
 
       const precioUnitario = item.precio_unitario || productData[0].precio
       const subtotal = item.cantidad * precioUnitario
+      total += subtotal
 
       await connection.query(
         `INSERT INTO detalle_pedido (pedido_id, producto_id, cantidad, precio_unitario, subtotal, observaciones)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [orderId, item.producto_id, item.cantidad, precioUnitario, subtotal, item.observaciones || null]
+      )
+    }
+
+    if (metodo_pago) {
+      const validMethods = ['efectivo', 'tarjeta', 'qr', 'transferencia']
+      if (!validMethods.includes(metodo_pago)) {
+        throw new Error('Metodo de pago invalido')
+      }
+      await connection.query(
+        `INSERT INTO pago (pedido_id, metodo, monto) VALUES (?, ?, ?)`,
+        [orderId, metodo_pago, total]
+      )
+      await connection.query(
+        `UPDATE pedido SET estado_pago = 'pagado' WHERE id = ?`,
+        [orderId]
       )
     }
 

@@ -20,6 +20,7 @@ const orderForm = ref({
   reserva_id: null,
   mesero_id: authStore.user?.id || null,
   observaciones: '',
+  metodo_pago: '',
   items: [
     { producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' }
   ]
@@ -53,12 +54,8 @@ const orderSubtotal = computed(() => {
   }, 0)
 })
 
-const orderTax = computed(() => {
-  return parseFloat((orderSubtotal.value * 0.13).toFixed(2))
-})
-
 const orderTotal = computed(() => {
-  return parseFloat((orderSubtotal.value + orderTax.value).toFixed(2))
+  return parseFloat(orderSubtotal.value.toFixed(2))
 })
 
 const getStatusLabel = (status) => {
@@ -136,6 +133,7 @@ const openAddModal = () => {
     reserva_id: null,
     mesero_id: authStore.user?.id || null,
     observaciones: '',
+    metodo_pago: '',
     items: [{ producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' }]
   }
   showNewCustomerForm.value = false
@@ -199,6 +197,7 @@ const saveOrder = async () => {
       reserva_id: orderForm.value.reserva_id || null,
       mesero_id: orderForm.value.mesero_id,
       observaciones: orderForm.value.observaciones || null,
+      metodo_pago: orderForm.value.metodo_pago || null,
       items: validItems
     }
 
@@ -325,6 +324,12 @@ onMounted(async () => {
               </span>
             </div>
             
+            <!-- Payment Info -->
+            <div v-if="order.metodo_pago" class="order-waiter">
+              <span class="material-symbols-outlined">payments</span>
+              Pago: {{ order.metodo_pago.charAt(0).toUpperCase() + order.metodo_pago.slice(1) }}
+            </div>
+
             <!-- Waiter Info -->
             <div v-if="canSeeWaiterInfo && order.mesero_nombre" class="order-waiter">
               <span class="material-symbols-outlined">person</span>
@@ -365,6 +370,7 @@ onMounted(async () => {
               <th>Mesa</th>
               <th>Items</th>
               <th>Mesero</th>
+              <th>Pago</th>
               <th>Hora</th>
               <th>Total</th>
               <th>Estado</th>
@@ -391,6 +397,7 @@ onMounted(async () => {
                 </div>
               </td>
               <td class="cell-muted">{{ order.mesero_nombre || '-' }}</td>
+              <td class="cell-muted">{{ order.metodo_pago ? (order.metodo_pago.charAt(0).toUpperCase() + order.metodo_pago.slice(1)) : '-' }}</td>
               <td class="cell-muted">{{ order.time }}</td>
               <td class="cell-bold">{{ formatCurrency(order.total) }}</td>
               <td>
@@ -463,6 +470,16 @@ onMounted(async () => {
             </div>
 
             <div class="form-group">
+              <label class="form-label">Metodo de pago</label>
+              <select v-model="orderForm.metodo_pago" class="input">
+                <option value="">Seleccionar metodo (opcional)</option>
+                <option v-for="method in paymentMethods" :key="method" :value="method">
+                  {{ method.charAt(0).toUpperCase() + method.slice(1) }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
               <label class="form-label">Items</label>
               <div class="order-items-form">
                 <div class="order-item-row order-item-header">
@@ -493,10 +510,6 @@ onMounted(async () => {
               <div class="summary-row">
                 <span>Subtotal:</span>
                 <span>{{ formatCurrency(orderSubtotal) }}</span>
-              </div>
-              <div class="summary-row">
-                <span>Impuesto (13%):</span>
-                <span>{{ formatCurrency(orderTax) }}</span>
               </div>
               <div class="summary-row summary-total">
                 <span>TOTAL:</span>

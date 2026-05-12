@@ -4,6 +4,7 @@ const getOrders = async () => {
   const [rows] = await db.query(
     `SELECT p.id, p.cliente_id, p.reserva_id, p.mesa_id, p.mesero_id,
             p.estado_servicio, p.estado_pago, p.observaciones, p.creado_en,
+            pg.metodo AS metodo_pago,
             m.numero AS mesa_numero,
             u.nombre AS mesero_nombre, u.apellido AS mesero_apellido,
             c.nombre AS cliente_nombre
@@ -11,6 +12,7 @@ const getOrders = async () => {
      LEFT JOIN mesa m ON p.mesa_id = m.id
      LEFT JOIN usuario u ON p.mesero_id = u.id
      LEFT JOIN cliente c ON p.cliente_id = c.id
+     LEFT JOIN pago pg ON pg.id = (SELECT MAX(id) FROM pago WHERE pedido_id = p.id)
      ORDER BY p.creado_en DESC`
   )
   return rows
@@ -51,6 +53,7 @@ const findOrderById = async (id) => {
   const [rows] = await db.query(
     `SELECT p.id, p.cliente_id, p.reserva_id, p.mesa_id, p.mesero_id,
             p.estado_servicio, p.estado_pago, p.observaciones, p.creado_en,
+            pg.metodo AS metodo_pago,
             m.numero AS mesa_numero,
             u.nombre AS mesero_nombre, u.apellido AS mesero_apellido,
             c.nombre AS cliente_nombre,
@@ -60,6 +63,7 @@ const findOrderById = async (id) => {
      LEFT JOIN usuario u ON p.mesero_id = u.id
      LEFT JOIN cliente c ON p.cliente_id = c.id
      LEFT JOIN reserva r ON p.reserva_id = r.id
+     LEFT JOIN pago pg ON pg.id = (SELECT MAX(id) FROM pago WHERE pedido_id = p.id)
      WHERE p.id = ?`,
     [id]
   )
@@ -154,6 +158,7 @@ const getOrdersByDate = async (fecha) => {
   const [rows] = await db.query(
     `SELECT p.id, p.cliente_id, p.reserva_id, p.mesa_id, p.mesero_id,
             p.estado_servicio, p.estado_pago, p.observaciones, p.creado_en,
+            pg.metodo AS metodo_pago,
             m.numero AS mesa_numero,
             u.nombre AS mesero_nombre, u.apellido AS mesero_apellido,
             c.nombre AS cliente_nombre
@@ -161,6 +166,7 @@ const getOrdersByDate = async (fecha) => {
      LEFT JOIN mesa m ON p.mesa_id = m.id
      LEFT JOIN usuario u ON p.mesero_id = u.id
      LEFT JOIN cliente c ON p.cliente_id = c.id
+     LEFT JOIN pago pg ON pg.id = (SELECT MAX(id) FROM pago WHERE pedido_id = p.id)
      WHERE DATE(p.creado_en) = ?
      ORDER BY p.creado_en DESC`,
     [fecha]
@@ -172,6 +178,7 @@ const getOrdersByStatus = async (estado_servicio) => {
   const [rows] = await db.query(
     `SELECT p.id, p.cliente_id, p.reserva_id, p.mesa_id, p.mesero_id,
             p.estado_servicio, p.estado_pago, p.observaciones, p.creado_en,
+            pg.metodo AS metodo_pago,
             m.numero AS mesa_numero,
             u.nombre AS mesero_nombre, u.apellido AS mesero_apellido,
             c.nombre AS cliente_nombre
@@ -179,6 +186,7 @@ const getOrdersByStatus = async (estado_servicio) => {
      LEFT JOIN mesa m ON p.mesa_id = m.id
      LEFT JOIN usuario u ON p.mesero_id = u.id
      LEFT JOIN cliente c ON p.cliente_id = c.id
+     LEFT JOIN pago pg ON pg.id = (SELECT MAX(id) FROM pago WHERE pedido_id = p.id)
      WHERE p.estado_servicio = ?
      ORDER BY p.creado_en DESC`,
     [estado_servicio]

@@ -1,7 +1,5 @@
 const db = require("../config/db")
 
-const TAX_RATE = 0.13
-
 const getInvoices = async () => {
   const [rows] = await db.query(
     `SELECT f.id, f.pedido_id, f.numero_factura, f.nit_ci, f.razon_social,
@@ -94,8 +92,8 @@ const createInvoice = async (pedido_id, nit_ci, razon_social, codigo_control = n
       [pedido_id]
     )
     const subtotal = parseFloat(details[0].subtotal)
-    const impuesto = parseFloat((subtotal * TAX_RATE).toFixed(2))
-    const total = parseFloat((subtotal + impuesto).toFixed(2))
+    const impuesto = 0
+    const total = subtotal
     
     const numero_factura = await getNextInvoiceNumber()
     
