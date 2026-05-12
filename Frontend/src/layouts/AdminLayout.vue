@@ -140,9 +140,9 @@ const handleLogout = () => {
           </button>
           
           <!-- Settings -->
-          <button class="topbar-btn">
+          <RouterLink to="/settings" class="topbar-btn">
             <span class="material-symbols-outlined">settings</span>
-          </button>
+          </RouterLink>
         </div>
       </header>
       
@@ -505,6 +505,10 @@ const handleLogout = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.topbar-btn {
+  text-decoration: none;
 }
 
 .topbar-btn:hover {
