@@ -352,13 +352,14 @@ const deleteUser = async (employee) => {
                   <button @click="openEditModal(employee)" class="btn btn-secondary btn-sm">
                     Editar
                   </button>
-                  <button
+                  
+                  <button v-if="employee.rol !== 'admin'"
                     @click="deleteUser(employee)"
                     class="btn btn-danger btn-sm"
                   >
                     Eliminar
                   </button>
-                  <button
+                  <button v-if="employee.rol !== 'admin'"
                     @click="toggleStatus(employee)"
                     :class="employee.status === 'active' ? 'btn btn-warning btn-sm' : 'btn btn-primary btn-sm'"
                   >
@@ -423,7 +424,7 @@ const deleteUser = async (employee) => {
 
             
             
-            <div class="form-checkbox">
+            <div class="form-checkbox" v-if="formData.rol !== 'admin'">
               <input 
                 v-model="formData.status" 
                 type="checkbox" 
