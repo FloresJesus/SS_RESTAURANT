@@ -82,6 +82,7 @@ export interface SalesStats {
   weekly: { day: string; sales: number }[]
   topProducts: { name: string; quantity: number; value: number }[]
   today: { orders: number; sales: number }
+  categories: { categoria: string; total_ventas: number }[]
 }
 
 export const useRestaurantStore = defineStore('restaurant', () => {
@@ -103,7 +104,8 @@ export const useRestaurantStore = defineStore('restaurant', () => {
       { day: 'Dom', sales: 0 }
     ],
     topProducts: [],
-    today: { orders: 0, sales: 0 }
+    today: { orders: 0, sales: 0 },
+    categories: []
   })
 
   const loadSalesStats = async () => {

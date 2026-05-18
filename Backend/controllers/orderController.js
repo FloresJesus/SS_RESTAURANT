@@ -334,19 +334,40 @@ const getSalesStats = async (req, res) => {
     const weeklyRows = await getWeeklySales()
     const topProducts = await getTopSellingProducts(5)
     const todayData = await getDailySales()
+    const categoryData = await getSalesByCategory()
 
     const dayNames = { Monday: 'Lun', Tuesday: 'Mar', Wednesday: 'Mié', Thursday: 'Jue', Friday: 'Vie', Saturday: 'Sáb', Sunday: 'Dom' }
-    const dayOrder = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
-    const weekly = dayOrder.map(day => {
-      const found = weeklyRows.find(r => dayNames[r.dia_nombre] === day)
-      return { day, sales: found ? parseFloat(found.total_ventas) : 0 }
-    })
+    const weekly = weeklyRows.map(r => ({
+      day: dayNames[r.dia_nombre] || r.dia_nombre,
+      sales: parseFloat(r.total_ventas),
+      date: r.fecha
+    }))
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date()
+      d.setDate(d.getDate() - (6 - i))
+      const dateStr = d.toISOString().split('T')[0]
+      if (!weekly.find(w => w.date === dateStr)) {
+        weekly.push({
+          day: dayNames[d.toLocaleDateString('en-US', { weekday: 'long' })] || '???',
+          sales: 0,
+          date: dateStr
+        })
+      }
+    }
+
+    weekly.sort((a, b) => a.date.localeCompare(b.date))
 
     const products = topProducts.map(p => ({
       name: p.nombre,
       quantity: Number(p.cantidad_vendida),
       value: parseFloat(p.total_ventas)
+    }))
+
+    const categories = categoryData.map(c => ({
+      categoria: c.categoria || 'Sin categoria',
+      total_ventas: parseFloat(c.total_ventas)
     }))
 
     res.json({
@@ -355,7 +376,8 @@ const getSalesStats = async (req, res) => {
       today: {
         orders: Number(todayData.cantidad_pedidos),
         sales: parseFloat(todayData.subtotal_ventas)
-      }
+      },
+      categories
     })
   } catch (error) {
     console.error("Error al obtener estadisticas:", error)

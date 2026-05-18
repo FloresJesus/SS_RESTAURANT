@@ -1,5 +1,5 @@
-<script setup>
-import { computed, onMounted } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { useAuthStore } from '@/stores/auth'
 import { Line, Doughnut } from 'vue-chartjs'
@@ -33,21 +33,36 @@ const authStore = useAuthStore()
 
 const userRole = computed(() => authStore.user?.rol || '')
 
+const filterRange = ref('week')
+
+const todayOrders = computed(() =>
+  store.orders.filter(o => {
+    const d = new Date(o.creado_en)
+    const now = new Date()
+    return d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear()
+  })
+)
+
 const stats = computed(() => {
-  const totalSales = store.salesData.weekly.reduce((sum, day) => sum + day.sales, 0)
-  const ordersToday = store.orders.length
-  const pendingOrders = store.orders.filter(order => order.status === 'pending').length
-  const preparingOrders = store.orders.filter(order => order.status === 'preparing').length
-  const readyOrders = store.orders.filter(order => order.status === 'ready').length
-  const avgTicket = ordersToday ? store.orders.reduce((sum, order) => sum + Number(order.total), 0) / ordersToday : 0
+  const today = store.salesData.today
+  const todayOrd = todayOrders.value
+  const pendingOrders = todayOrd.filter(order => order.status === 'pending').length
+  const preparingOrders = todayOrd.filter(order => order.status === 'preparing').length
+  const readyOrders = todayOrd.filter(order => order.status === 'ready').length
+  const avgTicket = today.orders > 0 ? today.sales / today.orders : 0
+
   const occupiedTables = store.tables.filter(table => table.estado !== 'libre').length
   const availableTables = store.tables.filter(table => table.estado === 'libre').length
 
   const weeklyData = store.salesData.weekly
-  const todaySalesNum = weeklyData.length > 0 ? weeklyData[weeklyData.length - 1].sales : 0
-  const yesterdaySalesNum = weeklyData.length > 1 ? weeklyData[weeklyData.length - 2].sales : 0
+  const todayIndex = weeklyData.findIndex(d => d.day === getTodayLabel())
+  const yesterdayIndex = todayIndex > 0 ? todayIndex - 1 : -1
+  const todaySalesNum = todayIndex >= 0 ? weeklyData[todayIndex].sales : 0
+  const yesterdaySalesNum = yesterdayIndex >= 0 ? weeklyData[yesterdayIndex].sales : 0
   const prevWeekAvg = weeklyData.length >= 7
-    ? weeklyData.slice(0, -1).reduce((s, d) => s + d.sales, 0) / 6
+    ? weeklyData.reduce((s, d) => s + d.sales, 0) / 7
     : 0
 
   const trendVsYesterday = yesterdaySalesNum > 0
@@ -59,8 +74,8 @@ const stats = computed(() => {
     : null
 
   return {
-    todaySales: totalSales,
-    ordersToday,
+    todaySales: today.sales,
+    ordersToday: today.orders,
     pendingOrders,
     preparingOrders,
     readyOrders,
@@ -68,14 +83,19 @@ const stats = computed(() => {
     occupancy: store.tables.length ? Math.round((occupiedTables / store.tables.length) * 100) : 0,
     availableTables,
     trendVsYesterday,
-    trendVsWeek,
-    todaySalesNum,
-    yesterdaySalesNum,
-    prevWeekAvg
+    trendVsWeek
   }
 })
 
-const formatCurrency = (value) => {
+function getTodayLabel() {
+  const map: Record<string, string> = {
+    Monday: 'Lun', Tuesday: 'Mar', Wednesday: 'Mié',
+    Thursday: 'Jue', Friday: 'Vie', Saturday: 'Sáb', Sunday: 'Dom'
+  }
+  return map[new Date().toLocaleDateString('en-US', { weekday: 'long' })] || 'Lun'
+}
+
+const formatCurrency = (value: number) => {
   return `Bs ${Number(value).toFixed(2)}`
 }
 
@@ -108,7 +128,7 @@ const lineChartOptions = {
       borderWidth: 1,
       padding: 12,
       callbacks: {
-        label: (context) => formatCurrency(context.raw)
+        label: (context: any) => formatCurrency(context.raw)
       }
     }
   },
@@ -121,23 +141,32 @@ const lineChartOptions = {
       grid: { color: '#e1e3e2' },
       ticks: { 
         color: '#707975',
-        callback: (value) => formatCurrency(value)
+        callback: (value: any) => formatCurrency(value)
       }
     }
   }
 }
 
 const doughnutChartData = computed(() => {
-  const data = store.salesData.topProducts.slice(0, 4).map(p => p.value)
-  const labels = store.salesData.topProducts.slice(0, 4).map(p => p.name)
-  const hasData = data.some(v => v > 0)
+  const products = store.salesData.topProducts.slice(0, 6)
+  const hasData = products.some(p => p.value > 0)
+  if (!hasData) {
+    return {
+      labels: ['Sin datos'],
+      datasets: [{
+        data: [1],
+        backgroundColor: ['#e8ede9'],
+        borderColor: '#f8faf9',
+        borderWidth: 3,
+      }]
+    }
+  }
+  const colors = ['#00342b', '#22c55e', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899']
   return {
-    labels: hasData ? labels : ['Sin datos', '', '', ''],
+    labels: products.map(p => p.name),
     datasets: [{
-      data: hasData ? data : [1, 0, 0, 0],
-      backgroundColor: hasData
-        ? ['#00342b', '#22c55e', '#3b82f6', '#f59e0b']
-        : ['#e8ede9', '#e8ede9', '#e8ede9', '#e8ede9'],
+      data: products.map(p => p.value),
+      backgroundColor: products.map((_, i) => colors[i % colors.length]),
       borderColor: '#f8faf9',
       borderWidth: 3,
     }]
@@ -157,13 +186,22 @@ const doughnutChartOptions = {
         usePointStyle: true,
         pointStyle: 'circle'
       }
+    },
+    tooltip: {
+      callbacks: {
+        label: (context: any) => {
+          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0)
+          const pct = total > 0 ? Math.round((context.raw / total) * 100) : 0
+          return `${context.label}: ${formatCurrency(context.raw)} (${pct}%)`
+        }
+      }
     }
   }
 }
 
-const recentOrders = computed(() => store.orders.slice(0, 5))
+const recentOrders = computed(() => todayOrders.value.slice(0, 5))
 
-const statusLabels = {
+const statusLabels: Record<string, string> = {
   pending: 'Pendiente',
   preparing: 'Preparando',
   ready: 'Listo',
@@ -171,9 +209,11 @@ const statusLabels = {
 }
 
 onMounted(async () => {
-  await store.loadOrders()
-  await store.loadTables()
-  await store.loadSalesStats()
+  await Promise.all([
+    store.loadOrders(),
+    store.loadTables(),
+    store.loadSalesStats()
+  ])
 })
 </script>
 
@@ -258,13 +298,12 @@ onMounted(async () => {
       <div class="card chart-card chart-card-wide">
         <div class="card-header">
           <div>
-            <h3 class="card-title">Ventas de la Semana</h3>
+            <h3 class="card-title">Ventas de los Ultimos 7 Dias</h3>
             <p class="card-subtitle">Ingresos diarios</p>
           </div>
-          <select class="filter-select">
-            <option>Esta semana</option>
-            <option>Semana pasada</option>
-            <option>Este mes</option>
+          <select v-model="filterRange" class="filter-select">
+            <option value="week">Ultimos 7 dias</option>
+            <option value="month">Este mes</option>
           </select>
         </div>
         <div class="chart-container">
@@ -272,12 +311,12 @@ onMounted(async () => {
         </div>
       </div>
       
-      <!-- Categories Chart -->
+      <!-- Top Products Chart -->
       <div class="card chart-card">
         <div class="card-header">
           <div>
-            <h3 class="card-title">Ventas por Categoria</h3>
-            <p class="card-subtitle">Distribucion del dia</p>
+            <h3 class="card-title">Productos mas Vendidos</h3>
+            <p class="card-subtitle">Platos del dia de hoy</p>
           </div>
         </div>
         <div class="chart-container">

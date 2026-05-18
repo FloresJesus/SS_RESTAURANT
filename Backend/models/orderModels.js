@@ -213,7 +213,7 @@ const getDailySales = async () => {
      FROM pedido p
      LEFT JOIN detalle_pedido dp ON p.id = dp.pedido_id
      WHERE DATE(p.creado_en) = CURDATE()
-     AND p.estado_pago = 'pagado'
+     AND p.estado_pago IN ('pagado', 'pendiente')
      GROUP BY DATE(p.creado_en)`
   )
   return rows[0] || { fecha: new Date().toISOString().split('T')[0], cantidad_pedidos: 0, subtotal_ventas: 0 }
@@ -229,7 +229,7 @@ const getWeeklySales = async () => {
      FROM pedido p
      LEFT JOIN detalle_pedido dp ON p.id = dp.pedido_id
      WHERE p.creado_en >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-     AND p.estado_pago = 'pagado'
+     AND p.estado_pago IN ('pagado', 'pendiente')
      GROUP BY DATE(p.creado_en), DAYNAME(p.creado_en)
      ORDER BY DATE(p.creado_en) ASC`
   )
@@ -248,7 +248,7 @@ const getTopSellingProducts = async (limit = 10) => {
      LEFT JOIN categoria_producto c ON pr.categoria_id = c.id
      JOIN pedido p ON dp.pedido_id = p.id
      WHERE p.creado_en >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-     AND p.estado_pago = 'pagado'
+     AND p.estado_pago IN ('pagado', 'pendiente')
      GROUP BY pr.id, pr.nombre, c.nombre
      ORDER BY cantidad_vendida DESC
      LIMIT ?`,
@@ -267,7 +267,7 @@ const getSalesByCategory = async () => {
      LEFT JOIN categoria_producto c ON pr.categoria_id = c.id
      JOIN pedido p ON dp.pedido_id = p.id
      WHERE DATE(p.creado_en) = CURDATE()
-     AND p.estado_pago = 'pagado'
+     AND p.estado_pago IN ('pagado', 'pendiente')
      GROUP BY c.nombre
      ORDER BY total_ventas DESC`
   )
