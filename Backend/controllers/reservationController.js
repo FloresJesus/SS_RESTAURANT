@@ -1,3 +1,4 @@
+const { logAudit } = require("../utils/auditLogger")
 const {
   showReservations,
   findReservationById,
@@ -99,6 +100,7 @@ const createNewReservation = async (req, res) => {
       'pendiente',
       observaciones
     )
+    await logAudit(req.user.id, 'CREAR', 'reservaciones', result.insertId, `Reservacion ${result.insertId} creada`, req.ip)
     res.status(201).json({
       message: "Reservacion creada correctamente",
       id: result.insertId
@@ -146,6 +148,7 @@ const updateExistingReservation = async (req, res) => {
       estado,
       observaciones
     )
+    await logAudit(req.user.id, 'ACTUALIZAR', 'reservaciones', Number(id), `Reservacion ${id} actualizada`, req.ip)
     res.json({ message: "Reservacion actualizada correctamente" })
   } catch (error) {
     console.error("Error al actualizar la reservacion:", error)
@@ -173,6 +176,7 @@ const updateReservationState = async (req, res) => {
     }
 
     await updateReservationStatus(id, estado)
+    await logAudit(req.user.id, 'ACTUALIZAR', 'reservaciones', Number(id), `Estado reservacion ${id} cambiado a ${estado}`, req.ip)
     res.json({ message: "Estado de reservacion actualizado correctamente" })
   } catch (error) {
     console.error("Error al actualizar estado de la reservacion:", error)
@@ -190,6 +194,7 @@ const deleteExistingReservation = async (req, res) => {
     }
 
     await deleteReservation(id)
+    await logAudit(req.user.id, 'ELIMINAR', 'reservaciones', Number(id), `Reservacion ${id} eliminada`, req.ip)
     res.json({ message: "Reservacion eliminada correctamente" })
   } catch (error) {
     console.error("Error al eliminar la reservacion:", error)

@@ -1,4 +1,5 @@
 const db = require("../config/db")
+const { logAudit } = require("../utils/auditLogger")
 const {
   getOrders,
   getOrderDetails,
@@ -191,6 +192,7 @@ const createNewOrder = async (req, res) => {
 
     await connection.commit()
 
+    await logAudit(req.user.id, 'CREAR', 'pedidos', orderId, `Pedido ${orderId} creado en mesa ${mesa_id}`, req.ip)
     res.status(201).json({
       id: orderId,
       message: "Pedido creado correctamente"
@@ -258,6 +260,7 @@ const updateOrderItems = async (req, res) => {
     }
 
     await connection.commit()
+    await logAudit(req.user.id, 'ACTUALIZAR', 'pedidos', Number(id), `Items del pedido ${id} actualizados`, req.ip)
     res.json({ message: "Items del pedido actualizados correctamente" })
   } catch (error) {
     await connection.rollback()
@@ -276,6 +279,7 @@ const deleteOrderItem = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Item no encontrado" })
     }
+    await logAudit(req.user.id, 'ELIMINAR', 'detalle_pedido', Number(itemId), `Item ${itemId} eliminado del pedido ${id}`, req.ip)
     res.json({ message: "Item eliminado del pedido correctamente" })
   } catch (error) {
     console.error("Error al eliminar item del pedido:", error)
@@ -319,6 +323,7 @@ const updateOrderStatus = async (req, res) => {
     }
 
     await connection.commit()
+    await logAudit(req.user.id, 'ACTUALIZAR', 'pedidos', Number(id), `Estado pedido ${id} cambiado a ${status}`, req.ip)
     res.json({ message: "Estado del pedido actualizado" })
   } catch (error) {
     await connection.rollback()

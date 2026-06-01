@@ -1,5 +1,6 @@
 const multer = require("multer")
 const imagekit = require("../config/imagekit")
+const { logAudit } = require("../utils/auditLogger")
 const {
   getCategories,
   findCategoryById,
@@ -63,6 +64,7 @@ const createNewCategory = async (req, res) => {
     }
 
     const result = await createCategory(nombre)
+    await logAudit(req.user.id, 'CREAR', 'categorias', result.insertId, `Categoria ${nombre} creada`, req.ip)
     res.status(201).json({
       message: "Categoria creada correctamente",
       id: result.insertId
@@ -96,7 +98,7 @@ const createNewMenuItem = async (req, res) => {
       disponible,
       imagen_url
     )
-
+    await logAudit(req.user.id, 'CREAR', 'productos', result.insertId, `Producto ${nombre} creado`, req.ip)
     res.status(201).json({
       message: "Producto creado correctamente",
       id: result.insertId
@@ -137,7 +139,7 @@ const updateExistingMenuItem = async (req, res) => {
       disponible !== undefined ? disponible : current.disponible,
       imagen_url || current.imagen_url
     )
-
+    await logAudit(req.user.id, 'ACTUALIZAR', 'productos', Number(id), `Producto ${nombre} actualizado`, req.ip)
     res.json({ message: "Producto actualizado correctamente" })
   } catch (error) {
     console.error("Error al actualizar el producto:", error)
@@ -155,6 +157,7 @@ const deleteMenuItemById = async (req, res) => {
     }
 
     await deleteProduct(id)
+    await logAudit(req.user.id, 'ELIMINAR', 'productos', Number(id), `Producto ${current.nombre} eliminado`, req.ip)
     res.json({ message: "Producto eliminado correctamente" })
   } catch (error) {
     console.error("Error al eliminar el producto:", error)

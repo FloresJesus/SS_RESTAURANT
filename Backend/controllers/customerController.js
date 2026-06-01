@@ -1,3 +1,4 @@
+const { logAudit } = require("../utils/auditLogger")
 const {
   showCustomers,
   findCustomerById,
@@ -49,6 +50,7 @@ const createNewCustomer = async (req, res) => {
 
   try {
     const result = await createCustomer(nombre, telefono, email)
+    await logAudit(req.user.id, 'CREAR', 'clientes', result.insertId, `Cliente ${nombre} creado`, req.ip)
     res.status(201).json({
       message: "Cliente creado correctamente",
       id: result.insertId
@@ -77,7 +79,7 @@ const updateExistingCustomer = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Cliente no encontrado" })
     }
-
+    await logAudit(req.user.id, 'ACTUALIZAR', 'clientes', Number(id), `Cliente ${nombre} actualizado`, req.ip)
     res.json({ message: "Cliente actualizado correctamente" })
   } catch (error) {
     console.error("Error al actualizar cliente:", error)
@@ -98,7 +100,7 @@ const deleteExistingCustomer = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Cliente no encontrado" })
     }
-
+    await logAudit(req.user.id, 'ELIMINAR', 'clientes', Number(id), `Cliente ${existingCustomer.nombre} eliminado`, req.ip)
     res.json({ message: "Cliente eliminado correctamente" })
   } catch (error) {
     console.error("Error al eliminar cliente:", error)

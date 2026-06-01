@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs")
 const jwt = require("jsonwebtoken")
+const { logAudit } = require("../utils/auditLogger")
 const { findUserByEmail } = require("../models/userModels")
 
 const login = async (req, res) => {
@@ -32,6 +33,7 @@ const login = async (req, res) => {
       { expiresIn: "8h" }
     )
 
+    await logAudit(user.id, 'LOGIN', 'usuarios', user.id, `Inicio de sesion: ${user.email}`, req.ip)
     res.json({
       token,
       user: {

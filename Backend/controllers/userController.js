@@ -1,4 +1,5 @@
 const bcrypt = require("bcryptjs")
+const { logAudit } = require("../utils/auditLogger")
 const {
   showUsers,
   findUserById,
@@ -53,7 +54,7 @@ const createUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10)
     const result = await createUserModel(nombre, apellido, email, hashedPassword, rol, activo)
-
+    await logAudit(req.user.id, 'CREAR', 'usuarios', result.insertId, `Usuario ${nombre} ${apellido || ''} creado`, req.ip)
     res.status(201).json({
       message: "Usuario creado correctamente",
       id: result.insertId
@@ -92,7 +93,7 @@ const updateUser = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Usuario no encontrado" })
     }
-
+    await logAudit(req.user.id, 'ACTUALIZAR', 'usuarios', Number(id), `Usuario ${nombre} ${apellido || ''} actualizado`, req.ip)
     res.json({ message: "Usuario actualizado correctamente" })
   } catch (error) {
     console.error("Error al actualizar usuario:", error)
@@ -113,7 +114,7 @@ const deleteUserById = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Usuario no encontrado" })
     }
-
+    await logAudit(req.user.id, 'ELIMINAR', 'usuarios', Number(id), `Usuario ${existingUser.nombre} ${existingUser.apellido || ''} eliminado`, req.ip)
     res.json({ message: "Usuario eliminado correctamente" })
   } catch (error) {
     console.error("Error al eliminar usuario:", error)

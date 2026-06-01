@@ -1,3 +1,4 @@
+const { logAudit } = require("../utils/auditLogger")
 const {
   getTickets,
   findTicketById,
@@ -90,6 +91,7 @@ const generateTicket = async (req, res) => {
     }
 
     const ticket = await createTicket(pedido_id)
+    await logAudit(req.user.id, 'CREAR', 'tickets', ticket.id, `Ticket ${ticket.numero_ticket} para pedido ${pedido_id}`, req.ip)
     res.status(201).json({
       message: "Ticket generado correctamente",
       ticket

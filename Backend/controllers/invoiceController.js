@@ -1,3 +1,4 @@
+const { logAudit } = require("../utils/auditLogger")
 const {
   getInvoices,
   findInvoiceById,
@@ -93,6 +94,7 @@ const generateInvoice = async (req, res) => {
     }
 
     const invoice = await createInvoice(pedido_id, nit_ci, razon_social, codigo_control, qr_url)
+    await logAudit(req.user.id, 'CREAR', 'facturas', invoice.id, `Factura ${invoice.numero_factura} para pedido ${pedido_id}`, req.ip)
     res.status(201).json({
       message: "Factura generada correctamente",
       factura: invoice

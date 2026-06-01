@@ -15,7 +15,8 @@ const allNavigation = [
   { name: 'Menu', path: '/menu', icon: 'restaurant_menu', roles: ['admin', 'cajero', 'mesero', 'cocina'] },
   { name: 'Pedidos', path: '/orders', icon: 'receipt_long', roles: ['admin', 'cajero', 'mesero', 'cocina'] },
   { name: 'Mesas', path: '/tables', icon: 'table_restaurant', roles: ['admin', 'cajero', 'mesero'] },
-  { name: 'Usuarios', path: '/employees', icon: 'groups', roles: ['admin'] }
+  { name: 'Usuarios', path: '/employees', icon: 'groups', roles: ['admin'] },
+  { name: 'Auditoria', path: '/audit', icon: 'history', roles: ['admin'] }
 ]
 
 const navigation = computed(() => {

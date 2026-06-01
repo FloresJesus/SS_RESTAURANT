@@ -1,3 +1,4 @@
+const { logAudit } = require("../utils/auditLogger")
 const {
   showTables,
   findTableById,
@@ -42,6 +43,7 @@ const createNewTable = async (req, res) => {
 
   try {
     const result = await createTable(numero, Number(capacidad))
+    await logAudit(req.user.id, 'CREAR', 'mesas', result.insertId, `Mesa #${numero} creada`, req.ip)
     res.status(201).json({
       message: "Mesa creada correctamente",
       id: result.insertId
@@ -78,7 +80,7 @@ const updateExistingTable = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Mesa no encontrada" })
     }
-
+    await logAudit(req.user.id, 'ACTUALIZAR', 'mesas', Number(id), `Mesa #${numero} actualizada`, req.ip)
     res.json({ message: "Mesa actualizada correctamente" })
   } catch (error) {
     console.error("Error al actualizar la mesa:", error)
@@ -109,7 +111,7 @@ const updateTableState = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Mesa no encontrada" })
     }
-
+    await logAudit(req.user.id, 'ACTUALIZAR', 'mesas', Number(id), `Estado mesa #${existingTable.numero} cambiado a ${estado}`, req.ip)
     res.json({ message: "Estado de mesa actualizado correctamente" })
   } catch (error) {
     console.error("Error al actualizar estado de la mesa:", error)
@@ -130,7 +132,7 @@ const deleteTableById = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Mesa no encontrada" })
     }
-
+    await logAudit(req.user.id, 'ELIMINAR', 'mesas', Number(id), `Mesa #${existingTable.numero} eliminada`, req.ip)
     res.json({ message: "Mesa eliminada correctamente" })
   } catch (error) {
     console.error("Error al eliminar la mesa:", error)

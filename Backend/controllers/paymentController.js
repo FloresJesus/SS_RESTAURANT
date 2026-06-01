@@ -1,4 +1,5 @@
 const db = require("../config/db")
+const { logAudit } = require("../utils/auditLogger")
 const {
   getPayments,
   getPaymentsByOrderId,
@@ -145,6 +146,7 @@ const processPayment = async (req, res) => {
 
     await connection.commit()
 
+    await logAudit(req.user.id, 'CREAR', 'pagos', paymentId, `Pago ${paymentId} para pedido ${pedido_id} - ${metodo} Bs.${monto}`, req.ip)
     res.status(201).json({
       message: "Pago registrado",
       paymentId,

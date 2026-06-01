@@ -1,3 +1,4 @@
+const { logAudit } = require("../utils/auditLogger")
 const { getSettings, updateSettings } = require("../models/settingsModels")
 
 const getConfig = async (req, res) => {
@@ -24,6 +25,7 @@ const updateConfig = async (req, res) => {
       telefono || '',
       nit || ''
     )
+    await logAudit(req.user.id, 'ACTUALIZAR', 'configuracion', null, `Configuracion actualizada: ${nombre_restaurante}`, req.ip)
     res.json({ message: "Configuracion actualizada correctamente" })
   } catch (error) {
     console.error("Error al actualizar configuracion:", error)
