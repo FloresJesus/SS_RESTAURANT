@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { required, isEmail, minLength } from '@/utils/validators'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -12,7 +13,38 @@ const error = ref('')
 const isLoading = ref(false)
 const rememberMe = ref(false)
 
+const emailError = ref('')
+const passwordError = ref('')
+
+const validateForm = () => {
+  let valid = true
+  emailError.value = ''
+  passwordError.value = ''
+
+  const emailRule = isEmail()
+  const passRule = minLength(6, 'La contraseña debe tener al menos 6 caracteres')
+
+  if (!required().validate(email.value)) {
+    emailError.value = required().message
+    valid = false
+  } else if (!emailRule.validate(email.value)) {
+    emailError.value = emailRule.message
+    valid = false
+  }
+
+  if (!required().validate(password.value)) {
+    passwordError.value = required().message
+    valid = false
+  } else if (!passRule.validate(password.value)) {
+    passwordError.value = passRule.message
+    valid = false
+  }
+
+  return valid
+}
+
 const handleSubmit = async () => {
+  if (!validateForm()) return
   error.value = ''
   isLoading.value = true
   
@@ -57,37 +89,47 @@ const handleSubmit = async () => {
           <span>{{ error }}</span>
         </div>
 
-        <form @submit.prevent="handleSubmit" class="login-form">
-          <!-- Email Field -->
-          <div class="form-field">
-            <label class="form-label" for="email">Email</label>
-            <div class="input-wrapper">
-              <input
-                id="email"
-                v-model="email"
-                type="email"
-                class="form-input"
-                placeholder="chef@sansalvador.com"
-                required
-              />
-              <span class="material-symbols-outlined input-icon">mail</span>
+          <form @submit.prevent="handleSubmit" class="login-form">
+            <!-- Email Field -->
+            <div class="form-field">
+              <label class="form-label" for="email">Email</label>
+              <div class="input-wrapper">
+                <input
+                  id="email"
+                  v-model="email"
+                  type="email"
+                  class="form-input"
+                  :class="{ 'form-input--error': emailError }"
+                  placeholder="chef@sansalvador.com"
+                  required
+                />
+                <span class="material-symbols-outlined input-icon">mail</span>
+              </div>
+              <p v-if="emailError" class="field-error">
+                <span class="material-symbols-outlined">error</span>
+                {{ emailError }}
+              </p>
             </div>
-          </div>
 
-          <div class="form-field">
-            <label class="form-label" for="password">Security Cipher</label>
-            <div class="input-wrapper">
-              <input
-                id="password"
-                v-model="password"
-                type="password"
-                class="form-input"
-                placeholder="••••••••"
-                required
-              />
-              <span class="material-symbols-outlined input-icon">lock</span>
+            <div class="form-field">
+              <label class="form-label" for="password">Security Cipher</label>
+              <div class="input-wrapper">
+                <input
+                  id="password"
+                  v-model="password"
+                  type="password"
+                  class="form-input"
+                  :class="{ 'form-input--error': passwordError }"
+                  placeholder="••••••••"
+                  required
+                />
+                <span class="material-symbols-outlined input-icon">lock</span>
+              </div>
+              <p v-if="passwordError" class="field-error">
+                <span class="material-symbols-outlined">error</span>
+                {{ passwordError }}
+              </p>
             </div>
-          </div>
 
           <div class="form-options">
             <label class="checkbox-label">
@@ -262,6 +304,28 @@ const handleSubmit = async () => {
 .form-input:focus {
   outline: none;
   border-bottom: 2px solid var(--primary);
+}
+
+.form-input--error {
+  border-color: var(--error);
+  border-bottom: 2px solid var(--error);
+}
+
+.form-input--error:focus {
+  border-color: var(--error);
+}
+
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.6875rem;
+  color: var(--error);
+}
+
+.field-error .material-symbols-outlined {
+  font-size: 0.75rem;
 }
 
 .input-icon {

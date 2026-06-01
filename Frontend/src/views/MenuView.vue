@@ -2,6 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { useAuthStore } from '@/stores/auth'
+import { required, min, isNumeric, composeValidators } from '@/utils/validators'
+import { useFormValidation } from '@/composables/useFormValidation'
+import FormField from '@/components/FormField.vue'
 
 const store = useRestaurantStore()
 const authStore = useAuthStore()
@@ -26,6 +29,17 @@ const formData = ref({
   descripcion: '',
   disponible: true,
   imagen_url: null
+})
+
+const { validateField, touchField, validateAll, getError, resetValidation } = useFormValidation({
+  nombre: {
+    rules: [required('El nombre del platillo es obligatorio')],
+    value: computed(() => formData.value.nombre)
+  },
+  precio: {
+    rules: [required('El precio es obligatorio'), isNumeric('El precio debe ser un numero valido'), min(1, 'El precio debe ser mayor a 0')],
+    value: computed(() => formData.value.precio)
+  }
 })
 
 const filteredItems = computed(() => {
@@ -85,6 +99,7 @@ const openAddModal = () => {
     disponible: true,
     imagen_url: null
   }
+  resetValidation()
   showModal.value = true
 }
 
@@ -101,6 +116,7 @@ const openEditModal = (item) => {
     disponible: item.disponible,
     imagen_url: item.imagen_url
   }
+  resetValidation()
   showModal.value = true
 }
 
@@ -109,6 +125,7 @@ const closeModal = () => {
   editingItem.value = null
   imageFile.value = null
   imagePreview.value = ''
+  resetValidation()
 }
 
 const removeImage = () => {
@@ -130,6 +147,8 @@ const onFileChange = async (event) => {
 }
 
 const saveItem = async () => {
+  if (!validateAll()) return
+
   const categoria = store.categories.find(c => c.nombre === formData.value.categoria)
   const payload = {
     nombre: formData.value.nombre,
@@ -293,10 +312,14 @@ onMounted(async () => {
           </div>
           
           <form @submit.prevent="saveItem" class="modal-form">
-            <div class="form-group">
-              <label class="form-label">Nombre</label>
-              <input v-model="formData.nombre" type="text" class="input" placeholder="Nombre del platillo" required />
-            </div>
+            <FormField
+              v-model="formData.nombre"
+              label="Nombre del platillo"
+              placeholder="Ej: Lomo Saltado"
+              required
+              :error="getError('nombre')"
+              @blur="touchField('nombre')"
+            />
             
             <div class="form-row">
               <div class="form-group">
@@ -306,16 +329,24 @@ onMounted(async () => {
                   <option v-for="cat in store.categories" :key="cat.id" :value="cat.nombre">{{ cat.nombre }}</option>
                 </select>
               </div>
-              <div class="form-group">
-                <label class="form-label">Precio (Bs)</label>
-                <input v-model="formData.precio" type="number" step="0.01" class="input" placeholder="0.00" required />
-              </div>
+              <FormField
+                v-model="formData.precio"
+                label="Precio (Bs)"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                required
+                :error="getError('precio')"
+                @blur="touchField('precio')"
+              />
             </div>
             
-            <div class="form-group">
-              <label class="form-label">Descripcion</label>
-              <textarea v-model="formData.descripcion" class="input textarea" placeholder="Descripcion del platillo"></textarea>
-            </div>
+            <FormField
+              v-model="formData.descripcion"
+              label="Descripción"
+              type="textarea"
+              placeholder="Descripcion del platillo"
+            />
 
             <div class="form-group">
               <label class="form-label">Imagen del platillo</label>

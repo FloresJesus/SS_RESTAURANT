@@ -1,6 +1,9 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { apiFetch, API_BASE } from '@/utils/api'
+import { required, isPhone, isNumeric, composeValidators } from '@/utils/validators'
+import { useFormValidation } from '@/composables/useFormValidation'
+import FormField from '@/components/FormField.vue'
 
 const settings = ref({
   nombre_restaurante: '',
@@ -13,6 +16,17 @@ const loading = ref(true)
 const saving = ref(false)
 const message = ref('')
 const messageType = ref('')
+
+const { validateField, touchField, validateAll, getError, resetValidation } = useFormValidation({
+  nombre_restaurante: {
+    rules: [required('El nombre del restaurante es obligatorio')],
+    value: computed(() => settings.value.nombre_restaurante)
+  },
+  telefono: {
+    rules: [isPhone()],
+    value: computed(() => settings.value.telefono)
+  }
+})
 
 const loadSettings = async () => {
   try {
@@ -32,11 +46,7 @@ const loadSettings = async () => {
 }
 
 const saveSettings = async () => {
-  if (!settings.value.nombre_restaurante) {
-    message.value = 'El nombre del restaurante es obligatorio'
-    messageType.value = 'error'
-    return
-  }
+  if (!validateAll()) return
 
   saving.value = true
   message.value = ''
@@ -82,25 +92,35 @@ onMounted(() => {
       </div>
 
       <form @submit.prevent="saveSettings" class="settings-form">
-        <div class="form-group">
-          <label class="form-label">Nombre del Restaurante</label>
-          <input v-model="settings.nombre_restaurante" type="text" class="input" placeholder="SAN SALVADOR" />
-        </div>
+        <FormField
+          v-model="settings.nombre_restaurante"
+          label="Nombre del Restaurante"
+          placeholder="SAN SALVADOR"
+          required
+          :error="getError('nombre_restaurante')"
+          @blur="touchField('nombre_restaurante')"
+        />
 
-        <div class="form-group">
-          <label class="form-label">Direccion</label>
-          <input v-model="settings.direccion" type="text" class="input" placeholder="Direccion del restaurante" />
-        </div>
+        <FormField
+          v-model="settings.direccion"
+          label="Dirección"
+          placeholder="Direccion del restaurante"
+        />
 
         <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Telefono</label>
-            <input v-model="settings.telefono" type="text" class="input" placeholder="Telefono" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">NIT</label>
-            <input v-model="settings.nit" type="text" class="input" placeholder="NIT" />
-          </div>
+          <FormField
+            v-model="settings.telefono"
+            label="Teléfono"
+            type="tel"
+            placeholder="Telefono"
+            :error="getError('telefono')"
+            @blur="touchField('telefono')"
+          />
+          <FormField
+            v-model="settings.nit"
+            label="NIT"
+            placeholder="NIT"
+          />
         </div>
 
         <div class="form-actions">

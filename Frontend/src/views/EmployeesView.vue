@@ -3,6 +3,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { apiFetch } from '@/utils/api'
+import { required, onlyLetters, isEmail, minLength, composeValidators } from '@/utils/validators'
+import { useFormValidation } from '@/composables/useFormValidation'
+import FormField from '@/components/FormField.vue'
 
 const usersStore = useUsersStore()
 const authStore = useAuthStore()
@@ -27,6 +30,25 @@ const formData = ref({
   rol: 'mesero',
   status: 'active',
   password: ''
+})
+
+const { validateField, touchField, validateAll, getError, resetValidation } = useFormValidation({
+  firstName: {
+    rules: [required(), onlyLetters(), minLength(2, 'El nombre debe tener al menos 2 caracteres')],
+    value: computed(() => formData.value.firstName)
+  },
+  lastName: {
+    rules: [required(), onlyLetters(), minLength(2, 'El apellido debe tener al menos 2 caracteres')],
+    value: computed(() => formData.value.lastName)
+  },
+  email: {
+    rules: [required(), isEmail()],
+    value: computed(() => formData.value.email)
+  },
+  password: {
+    rules: [minLength(6, 'La contraseña debe tener al menos 6 caracteres')],
+    value: computed(() => formData.value.password)
+  }
 })
 
 const employees = computed(() => {
@@ -90,6 +112,7 @@ const openAddModal = () => {
     status: 'active',
     password: ''
   }
+  resetValidation()
   showModal.value = true
 }
 
@@ -103,15 +126,19 @@ const openEditModal = (employee) => {
     status: employee.active ? 'active' : 'inactive',
     password: ''
   }
+  resetValidation()
   showModal.value = true
 }
 
 const closeModal = () => {
   showModal.value = false
   editingEmployee.value = null
+  resetValidation()
 }
 
 const saveEmployee = async () => {
+  if (!validateAll()) return
+
   const payload = {
     nombre: formData.value.firstName,
     apellido: formData.value.lastName,
@@ -389,21 +416,34 @@ const deleteUser = async (employee) => {
           
           <form @submit.prevent="saveEmployee" class="modal-form">
             <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Nombre</label>
-                <input v-model="formData.firstName" type="text" class="input" placeholder="Juan Perez" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Apellido</label>
-                <input v-model="formData.lastName" type="text" class="input" placeholder="Gomez" required />
-              </div>
+              <FormField
+                v-model="formData.firstName"
+                label="Nombre"
+                placeholder="Juan"
+                required
+                :error="getError('firstName')"
+                @blur="touchField('firstName')"
+              />
+              <FormField
+                v-model="formData.lastName"
+                label="Apellido"
+                placeholder="Pérez"
+                required
+                :error="getError('lastName')"
+                @blur="touchField('lastName')"
+              />
             </div>
             
             <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Email</label>
-                <input v-model="formData.email" type="email" class="input" placeholder="email@restaurant.com" required />
-              </div>
+              <FormField
+                v-model="formData.email"
+                label="Email"
+                type="email"
+                placeholder="email@restaurant.com"
+                required
+                :error="getError('email')"
+                @blur="touchField('email')"
+              />
               <div class="form-group">
                 <label class="form-label">Rol</label>
                 <select v-model="formData.rol" class="input">
@@ -415,14 +455,16 @@ const deleteUser = async (employee) => {
               </div>
             </div>
 
-            <div v-if="!editingEmployee" class="form-row">
-              <div class="form-group">
-                <label class="form-label">Contraseña</label>
-                <input v-model="formData.password" type="password" class="input" placeholder="Escribe una contraseña" required />
-              </div>
+            <div v-if="!editingEmployee">
+              <FormField
+                v-model="formData.password"
+                label="Contraseña"
+                type="password"
+                placeholder="Escribe una contraseña"
+                :error="getError('password')"
+                @blur="touchField('password')"
+              />
             </div>
-
-            
             
             <div class="form-checkbox" v-if="formData.rol !== 'admin'">
               <input 

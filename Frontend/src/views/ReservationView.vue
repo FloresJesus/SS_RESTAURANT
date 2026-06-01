@@ -1,6 +1,9 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { required, noNumbers, onlyLetters, isPhone, isEmail, min, max, composeValidators } from '@/utils/validators'
+import { useFormValidation } from '@/composables/useFormValidation'
+import FormField from '@/components/FormField.vue'
 
 const router = useRouter()
 
@@ -24,7 +27,36 @@ const assignedTable = ref('')
 const today = new Date().toISOString().split('T')[0]
 const openHours = ['12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30']
 
+const { validateField, touchField, validateAll, getError, resetValidation } = useFormValidation({
+  nombre: {
+    rules: [required(), noNumbers(), onlyLetters()],
+    value: computed(() => form.value.nombre)
+  },
+  telefono: {
+    rules: [required('El telefono es obligatorio'), isPhone()],
+    value: computed(() => form.value.telefono)
+  },
+  correo: {
+    rules: [isEmail()],
+    value: computed(() => form.value.correo)
+  },
+  fecha: {
+    rules: [required('La fecha es obligatoria')],
+    value: computed(() => form.value.fecha)
+  },
+  hora: {
+    rules: [required('La hora es obligatoria')],
+    value: computed(() => form.value.hora)
+  },
+  personas: {
+    rules: [required(), min(1, 'Minimo 1 persona'), max(20, 'Maximo 20 personas')],
+    value: computed(() => form.value.personas)
+  }
+})
+
 const submitReservation = async () => {
+  if (!validateAll()) return
+
   submitting.value = true
   error.value = ''
   success.value = false
@@ -93,44 +125,74 @@ const submitReservation = async () => {
         <div class="form-section">
           <h3 class="section-title">Datos de Contacto</h3>
           <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Nombre completo *</label>
-              <input v-model="form.nombre" type="text" class="input" placeholder="Tu nombre" required />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Telefono *</label>
-              <input v-model="form.telefono" type="tel" class="input" placeholder="Tu telefono" required />
-            </div>
+            <FormField
+              v-model="form.nombre"
+              label="Nombre completo"
+              placeholder="Tu nombre"
+              required
+              :error="getError('nombre')"
+              @blur="touchField('nombre')"
+            />
+            <FormField
+              v-model="form.telefono"
+              label="Teléfono"
+              type="tel"
+              placeholder="Tu telefono"
+              required
+              :error="getError('telefono')"
+              @blur="touchField('telefono')"
+            />
           </div>
-          <div class="form-group">
-            <label class="form-label">Correo electronico</label>
-            <input v-model="form.correo" type="email" class="input" placeholder="correo@ejemplo.com" />
-          </div>
+          <FormField
+            v-model="form.correo"
+            label="Correo electrónico"
+            type="email"
+            placeholder="correo@ejemplo.com"
+            :error="getError('correo')"
+            @blur="touchField('correo')"
+          />
         </div>
 
         <div class="form-section">
           <h3 class="section-title">Detalles de la Reservacion</h3>
           <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Fecha *</label>
-              <input v-model="form.fecha" type="date" class="input" :min="today" required />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Hora *</label>
-              <select v-model="form.hora" class="input" required>
-                <option value="" disabled>Selecciona un horario</option>
-                <option v-for="hour in openHours" :key="hour" :value="hour">{{ hour }}</option>
-              </select>
-            </div>
+            <FormField
+              v-model="form.fecha"
+              label="Fecha"
+              type="date"
+              :min="today"
+              required
+              :error="getError('fecha')"
+              @blur="touchField('fecha')"
+            />
+            <FormField
+              v-model="form.hora"
+              label="Hora"
+              type="select"
+              placeholder="Selecciona un horario"
+              required
+              :error="getError('hora')"
+              @blur="touchField('hora')"
+            >
+              <option v-for="hour in openHours" :key="hour" :value="hour">{{ hour }}</option>
+            </FormField>
           </div>
-          <div class="form-group">
-            <label class="form-label">Numero de personas *</label>
-            <input v-model.number="form.personas" type="number" class="input" min="1" max="20" required />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Notas adicionales</label>
-            <textarea v-model="form.notas" class="input textarea" placeholder="Alergias, celebraciones, preferencias..."></textarea>
-          </div>
+          <FormField
+            v-model.number="form.personas"
+            label="Número de personas"
+            type="number"
+            min="1"
+            max="20"
+            required
+            :error="getError('personas')"
+            @blur="touchField('personas')"
+          />
+          <FormField
+            v-model="form.notas"
+            label="Notas adicionales"
+            type="textarea"
+            placeholder="Alergias, celebraciones, preferencias..."
+          />
         </div>
 
         <div v-if="error" class="error-message">

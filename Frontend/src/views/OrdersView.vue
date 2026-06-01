@@ -3,6 +3,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { useAuthStore } from '@/stores/auth'
 import { apiFetch } from '@/utils/api'
+import { required, noNumbers, onlyLetters, isPhone, isEmail, min } from '@/utils/validators'
+import { useFormValidation } from '@/composables/useFormValidation'
+import FormField from '@/components/FormField.vue'
 
 const store = useRestaurantStore()
 const authStore = useAuthStore()
@@ -30,6 +33,21 @@ const newCustomerForm = ref({
   nombre: '',
   telefono: '',
   email: ''
+})
+
+const { validateField, touchField, validateAll, getError, resetValidation } = useFormValidation({
+  newName: {
+    rules: [required('El nombre es obligatorio'), noNumbers(), onlyLetters()],
+    value: computed(() => newCustomerForm.value.nombre)
+  },
+  newPhone: {
+    rules: [required('El telefono es obligatorio'), isPhone()],
+    value: computed(() => newCustomerForm.value.telefono)
+  },
+  newEmail: {
+    rules: [isEmail()],
+    value: computed(() => newCustomerForm.value.email)
+  }
 })
 
 const statuses = [
@@ -137,12 +155,14 @@ const openAddModal = () => {
     items: [{ producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' }]
   }
   showNewCustomerForm.value = false
+  resetValidation()
   showOrderModal.value = true
 }
 
 const closeOrderModal = () => {
   showOrderModal.value = false
   showNewCustomerForm.value = false
+  resetValidation()
 }
 
 const onItemMenuChange = (idx) => {
@@ -153,10 +173,7 @@ const onItemMenuChange = (idx) => {
 }
 
 const createNewCustomer = async () => {
-  if (!newCustomerForm.value.nombre || !newCustomerForm.value.telefono) {
-    alert('Nombre y telefono son obligatorios')
-    return
-  }
+  if (!validateAll()) return
 
   try {
     const result = await store.createCustomer({
@@ -453,9 +470,28 @@ onMounted(async () => {
                     </option>
                   </select>
                   <div v-else class="new-customer-form">
-                    <input v-model="newCustomerForm.nombre" type="text" class="input" placeholder="Nombre" />
-                    <input v-model="newCustomerForm.telefono" type="text" class="input" placeholder="Telefono" />
-                    <input v-model="newCustomerForm.email" type="email" class="input" placeholder="Email (opcional)" />
+                    <FormField
+                      v-model="newCustomerForm.nombre"
+                      placeholder="Nombre"
+                      required
+                      :error="getError('newName')"
+                      @blur="touchField('newName')"
+                    />
+                    <FormField
+                      v-model="newCustomerForm.telefono"
+                      type="tel"
+                      placeholder="Telefono"
+                      required
+                      :error="getError('newPhone')"
+                      @blur="touchField('newPhone')"
+                    />
+                    <FormField
+                      v-model="newCustomerForm.email"
+                      type="email"
+                      placeholder="Email (opcional)"
+                      :error="getError('newEmail')"
+                      @blur="touchField('newEmail')"
+                    />
                     <button type="button" @click="createNewCustomer" class="btn btn-primary btn-sm">Crear</button>
                     <button type="button" @click="showNewCustomerForm = false" class="btn btn-secondary btn-sm">Cancelar</button>
                   </div>
@@ -1113,8 +1149,8 @@ onMounted(async () => {
 }
 
 .new-customer-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
@@ -1125,6 +1161,10 @@ onMounted(async () => {
 .new-customer-form button {
   padding: 0.5rem 0.75rem;
   font-size: 0.625rem;
+}
+
+.new-customer-form > :nth-last-child(-n+2) {
+  align-self: flex-end;
 }
 
 .order-summary {

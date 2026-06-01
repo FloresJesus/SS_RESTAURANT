@@ -3,6 +3,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { useAuthStore } from '@/stores/auth'
 import { apiFetch } from '@/utils/api'
+import { required, onlyLetters, noNumbers, isPhone, isEmail, min, max, isNumeric, composeValidators } from '@/utils/validators'
+import { useFormValidation } from '@/composables/useFormValidation'
+import FormField from '@/components/FormField.vue'
 
 const store = useRestaurantStore()
 const authStore = useAuthStore()
@@ -28,6 +31,32 @@ const newCustomerForm = ref({
   email: ''
 })
 const showNewCustomerForm = ref(false)
+
+const { validateField: validateReservationField, touchField: touchReservationField, validateAll: validateReservation, getError: getReservationError, resetValidation: resetReservationValidation } = useFormValidation({
+  cantidad_personas: {
+    rules: [required(), min(1, 'Minimo 1 persona'), max(20, 'Maximo 20 personas')],
+    value: computed(() => reservationForm.value.cantidad_personas)
+  },
+  fecha_reserva: {
+    rules: [required('La fecha es obligatoria')],
+    value: computed(() => reservationForm.value.fecha_reserva)
+  },
+  hora_reserva: {
+    rules: [required('La hora es obligatoria')],
+    value: computed(() => reservationForm.value.hora_reserva)
+  }
+})
+
+const { validateField: validateTableField, touchField: touchTableField, validateAll: validateTable, getError: getTableError, resetValidation: resetTableValidation } = useFormValidation({
+  numero: {
+    rules: [required('El numero de mesa es obligatorio')],
+    value: computed(() => tableForm.value.numero)
+  },
+  capacidad: {
+    rules: [required(), isNumeric(), min(1, 'La capacidad minima es 1')],
+    value: computed(() => tableForm.value.capacidad)
+  }
+})
 
 const tableStats = computed(() => ({
   available: store.tables.filter(t => t.estado === 'libre').length,
@@ -76,13 +105,12 @@ const openTableModal = () => {
     numero: '',
     capacidad: 2
   }
+  resetTableValidation()
   showTableModal.value = true
 }
 
 const saveTable = async () => {
-  if (!tableForm.value.numero || tableForm.value.capacidad <= 0) {
-    return
-  }
+  if (!validateTable()) return
   try {
     await store.createTable({
       numero: tableForm.value.numero,
@@ -105,6 +133,7 @@ const openReservationModal = () => {
     observaciones: ''
   }
   showNewCustomerForm.value = false
+  resetReservationValidation()
   showReservationModal.value = true
 }
 
@@ -132,10 +161,11 @@ const createNewCustomer = async () => {
 }
 
 const saveReservation = async () => {
-  if (!reservationForm.value.mesa_id || !reservationForm.value.fecha_reserva || !reservationForm.value.hora_reserva) {
-    alert('Mesa, fecha y hora son obligatorios')
+  if (!reservationForm.value.mesa_id) {
+    alert('Debe seleccionar una mesa')
     return
   }
+  if (!validateReservation()) return
 
   try {
     await store.createReservation({
@@ -441,15 +471,24 @@ const todayReservations = computed(() => {
           </div>
 
           <form @submit.prevent="saveTable" class="modal-form">
-            <div class="form-group">
-              <label class="form-label">Numero de Mesa</label>
-              <input v-model="tableForm.numero" type="text" class="input" placeholder="1, 2, A1, Terraza" required />
-            </div>
+            <FormField
+              v-model="tableForm.numero"
+              label="Número de Mesa"
+              placeholder="Ej: 1, A1, Terraza"
+              required
+              :error="getTableError('numero')"
+              @blur="touchTableField('numero')"
+            />
 
-            <div class="form-group">
-              <label class="form-label">Capacidad</label>
-              <input v-model="tableForm.capacidad" type="number" min="1" class="input" required />
-            </div>
+            <FormField
+              v-model="tableForm.capacidad"
+              label="Capacidad"
+              type="number"
+              min="1"
+              required
+              :error="getTableError('capacidad')"
+              @blur="touchTableField('capacidad')"
+            />
 
             <div class="modal-actions">
               <button type="button" @click="showTableModal = false" class="btn btn-secondary">Cancelar</button>
@@ -504,24 +543,40 @@ const todayReservations = computed(() => {
             </div>
 
             <div class="form-row-3">
-              <div class="form-group">
-                <label class="form-label">Personas</label>
-                <input v-model="reservationForm.cantidad_personas" type="number" min="1" max="20" class="input" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Fecha</label>
-                <input v-model="reservationForm.fecha_reserva" type="date" class="input" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Hora</label>
-                <input v-model="reservationForm.hora_reserva" type="time" class="input" required />
-              </div>
+              <FormField
+                v-model="reservationForm.cantidad_personas"
+                label="Personas"
+                type="number"
+                min="1"
+                max="20"
+                required
+                :error="getReservationError('cantidad_personas')"
+                @blur="touchReservationField('cantidad_personas')"
+              />
+              <FormField
+                v-model="reservationForm.fecha_reserva"
+                label="Fecha"
+                type="date"
+                required
+                :error="getReservationError('fecha_reserva')"
+                @blur="touchReservationField('fecha_reserva')"
+              />
+              <FormField
+                v-model="reservationForm.hora_reserva"
+                label="Hora"
+                type="time"
+                required
+                :error="getReservationError('hora_reserva')"
+                @blur="touchReservationField('hora_reserva')"
+              />
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Notas</label>
-              <textarea v-model="reservationForm.observaciones" class="input textarea" placeholder="Ocasion especial, preferencias, etc."></textarea>
-            </div>
+            <FormField
+              v-model="reservationForm.observaciones"
+              label="Notas"
+              type="textarea"
+              placeholder="Ocasion especial, preferencias, etc."
+            />
             
             <div class="modal-actions">
               <button type="button" @click="showReservationModal = false" class="btn btn-secondary">Cancelar</button>

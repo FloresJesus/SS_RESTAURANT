@@ -2,6 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useCustomersStore } from '@/stores/customers'
 import { apiFetch } from '@/utils/api'
+import { required, noNumbers, onlyLetters, isPhone, isEmail, minLength, composeValidators } from '@/utils/validators'
+import { useFormValidation } from '@/composables/useFormValidation'
+import FormField from '@/components/FormField.vue'
 
 const customersStore = useCustomersStore()
 
@@ -15,18 +18,20 @@ const formData = ref({
   email: ''
 })
 
-const nombreError = ref('')
-
-// Validar que el nombre no contenga números
-const validateNombre = (nombre) => {
-  const numeroRegex = /[0-9]/
-  if (numeroRegex.test(nombre)) {
-    nombreError.value = 'El nombre no puede contener números'
-    return false
+const { validateField, touchField, validateAll, getError, resetValidation } = useFormValidation({
+  nombre: {
+    rules: [required(), noNumbers(), onlyLetters(), minLength(3, 'El nombre debe tener al menos 3 caracteres')],
+    value: computed(() => formData.value.nombre)
+  },
+  telefono: {
+    rules: [required('El telefono es obligatorio'), isPhone()],
+    value: computed(() => formData.value.telefono)
+  },
+  email: {
+    rules: [isEmail()],
+    value: computed(() => formData.value.email)
   }
-  nombreError.value = ''
-  return true
-}
+})
 
 const customers = computed(() => {
   return customersStore.customers.map(customer => ({
@@ -60,11 +65,8 @@ onMounted(loadCustomers)
 
 const openAddModal = () => {
   editingCustomer.value = null
-const formData = ref({
-    nombre: '',
-    telefono: '',
-    email: ''
-  })
+  formData.value = { nombre: '', telefono: '', email: '' }
+  resetValidation()
   showModal.value = true
 }
 
@@ -75,19 +77,18 @@ const openEditModal = (customer) => {
     telefono: customer.telefono,
     email: customer.email || ''
   }
+  resetValidation()
   showModal.value = true
 }
 
 const closeModal = () => {
   showModal.value = false
   editingCustomer.value = null
+  resetValidation()
 }
 
 const saveCustomer = async () => {
-  // Validar nombre antes de guardar
-  if (!validateNombre(formData.value.nombre)) {
-    return
-  }
+  if (!validateAll()) return
 
   const payload = {
     nombre: formData.value.nombre,
@@ -292,30 +293,34 @@ const deleteCustomer = async (customer) => {
 
           <form @submit.prevent="saveCustomer" class="modal-form">
             <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Nombre</label>
-                <input 
-                  v-model="formData.nombre" 
-                  @input="validateNombre(formData.nombre)"
-                  type="text" 
-                  class="input" 
-                  :class="{ 'input-error': nombreError }"
-                  placeholder="Juan Pérez" 
-                  required 
-                />
-                <span v-if="nombreError" class="error-text">{{ nombreError }}</span>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Teléfono</label>
-                <input v-model="formData.telefono" type="tel" class="input" placeholder="+591 69999999" required />
-              </div>
+              <FormField
+                v-model="formData.nombre"
+                label="Nombre"
+                placeholder="Juan Pérez"
+                required
+                :error="getError('nombre')"
+                @blur="touchField('nombre')"
+              />
+              <FormField
+                v-model="formData.telefono"
+                label="Teléfono"
+                type="tel"
+                placeholder="+591 69999999"
+                required
+                :error="getError('telefono')"
+                @blur="touchField('telefono')"
+              />
             </div>
 
             <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Email</label>
-                <input v-model="formData.email" type="email" class="input" placeholder="cliente@email.com" />
-              </div>
+              <FormField
+                v-model="formData.email"
+                label="Email"
+                type="email"
+                placeholder="cliente@email.com"
+                :error="getError('email')"
+                @blur="touchField('email')"
+              />
             </div>
 
             <div class="modal-actions">
