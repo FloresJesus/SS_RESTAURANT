@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { useAuthStore } from '@/stores/auth'
 import { apiFetch } from '@/utils/api'
-import { required, onlyLetters, noNumbers, isPhone, isEmail, min, max, isNumeric, composeValidators } from '@/utils/validators'
+import { required, isNumeric, min } from '@/utils/validators'
 import { useFormValidation } from '@/composables/useFormValidation'
 import FormField from '@/components/FormField.vue'
 
@@ -12,40 +12,6 @@ const authStore = useAuthStore()
 
 const userRole = computed(() => authStore.user?.rol || '')
 const isAdmin = computed(() => userRole.value === 'admin')
-
-const activeTab = ref('tables')
-const showReservationModal = ref(false)
-
-const reservationForm = ref({
-  cliente_id: null,
-  mesa_id: null,
-  cantidad_personas: 2,
-  fecha_reserva: '',
-  hora_reserva: '19:00',
-  observaciones: ''
-})
-
-const newCustomerForm = ref({
-  nombre: '',
-  telefono: '',
-  email: ''
-})
-const showNewCustomerForm = ref(false)
-
-const { validateField: validateReservationField, touchField: touchReservationField, validateAll: validateReservation, getError: getReservationError, resetValidation: resetReservationValidation } = useFormValidation({
-  cantidad_personas: {
-    rules: [required(), min(1, 'Minimo 1 persona'), max(20, 'Maximo 20 personas')],
-    value: computed(() => reservationForm.value.cantidad_personas)
-  },
-  fecha_reserva: {
-    rules: [required('La fecha es obligatoria')],
-    value: computed(() => reservationForm.value.fecha_reserva)
-  },
-  hora_reserva: {
-    rules: [required('La hora es obligatoria')],
-    value: computed(() => reservationForm.value.hora_reserva)
-  }
-})
 
 const { validateField: validateTableField, touchField: touchTableField, validateAll: validateTable, getError: getTableError, resetValidation: resetTableValidation } = useFormValidation({
   numero: {
@@ -70,17 +36,6 @@ const getStatusInfo = (status) => {
     libre: { label: 'Libre', badgeClass: 'badge-success' },
     ocupada: { label: 'Ocupada', badgeClass: 'badge-danger' },
     mantenimiento: { label: 'Mantenimiento', badgeClass: 'badge-warning' }
-  }
-  return info[status] || { label: status, badgeClass: '' }
-}
-
-const getReservationStatusInfo = (status) => {
-  const info = {
-    confirmada: { label: 'Confirmada', badgeClass: 'badge-success' },
-    pendiente: { label: 'Pendiente', badgeClass: 'badge-warning' },
-    cancelada: { label: 'Cancelada', badgeClass: 'badge-danger' },
-    completada: { label: 'Completada', badgeClass: 'badge-info' },
-    no_asistio: { label: 'No Asistio', badgeClass: 'badge-muted' }
   }
   return info[status] || { label: status, badgeClass: '' }
 }
@@ -123,85 +78,6 @@ const saveTable = async () => {
   }
 }
 
-const openReservationModal = () => {
-  reservationForm.value = {
-    cliente_id: null,
-    mesa_id: null,
-    cantidad_personas: 2,
-    fecha_reserva: new Date().toISOString().split('T')[0],
-    hora_reserva: '19:00',
-    observaciones: ''
-  }
-  showNewCustomerForm.value = false
-  resetReservationValidation()
-  showReservationModal.value = true
-}
-
-const createNewCustomer = async () => {
-  if (!newCustomerForm.value.nombre || !newCustomerForm.value.telefono) {
-    alert('Nombre y telefono son obligatorios')
-    return
-  }
-
-  try {
-    const result = await store.createCustomer({
-      nombre: newCustomerForm.value.nombre,
-      telefono: newCustomerForm.value.telefono,
-      email: newCustomerForm.value.email || null
-    })
-    
-    if (result && result.id) {
-      reservationForm.value.cliente_id = result.id
-      showNewCustomerForm.value = false
-      newCustomerForm.value = { nombre: '', telefono: '', email: '' }
-    }
-  } catch (error) {
-    alert('Error al crear cliente')
-  }
-}
-
-const saveReservation = async () => {
-  if (!reservationForm.value.mesa_id) {
-    alert('Debe seleccionar una mesa')
-    return
-  }
-  if (!validateReservation()) return
-
-  try {
-    await store.createReservation({
-      cliente_id: reservationForm.value.cliente_id || null,
-      mesa_id: reservationForm.value.mesa_id,
-      cantidad_personas: reservationForm.value.cantidad_personas,
-      fecha_reserva: reservationForm.value.fecha_reserva,
-      hora_reserva: reservationForm.value.hora_reserva,
-      observaciones: reservationForm.value.observaciones || null
-    })
-    showReservationModal.value = false
-    await store.loadTables()
-  } catch (error) {
-    console.error('Error creando reservacion:', error)
-    alert(error.message || 'Error al crear reservacion')
-  }
-}
-
-const confirmReservation = async (id) => {
-  try {
-    await store.updateReservationStatus(id, 'confirmada')
-  } catch (error) {
-    console.error('Error confirmando reservacion:', error)
-    alert(error.message || 'Error al confirmar reservacion')
-  }
-}
-
-const cancelReservation = async (id) => {
-  try {
-    await store.updateReservationStatus(id, 'cancelada')
-  } catch (error) {
-    console.error('Error cancelando reservacion:', error)
-    alert(error.message || 'Error al cancelar reservacion')
-  }
-}
-
 const deleteTable = async (id) => {
   if (!confirm('¿Estás seguro de eliminar esta mesa?')) return
   try {
@@ -212,24 +88,8 @@ const deleteTable = async (id) => {
   }
 }
 
-const markNoShow = async (id) => {
-  try {
-    await store.updateReservationStatus(id, 'no_asistio')
-  } catch (error) {
-    console.error('Error marcando no asistio:', error)
-    alert(error.message || 'Error al marcar no asistio')
-  }
-}
-
 onMounted(async () => {
-  await store.loadReservations()
   await store.loadTables()
-  await store.loadCustomers()
-})
-
-const todayReservations = computed(() => {
-  const today = new Date().toISOString().split('T')[0]
-  return store.reservations.filter(r => r.fecha_reserva === today || r.estado === 'pendiente')
 })
 </script>
 
@@ -238,223 +98,138 @@ const todayReservations = computed(() => {
     <!-- Header -->
     <div class="page-header">
       <div class="header-info">
-        <h1 class="page-title">Mesas y Reservaciones</h1>
-        <p class="page-subtitle">Gestiona el estado de las mesas y reservaciones</p>
+        <h1 class="page-title">Mesas</h1>
+        <p class="page-subtitle">Gestiona el estado y disposicion de las mesas</p>
       </div>
       <div class="header-actions">
         <button v-if="isAdmin" @click="openTableModal" class="btn btn-secondary">
           <span class="material-symbols-outlined">add</span>
           Nueva Mesa
         </button>
-        <button @click="openReservationModal" class="btn btn-primary">
-          <span class="material-symbols-outlined">add</span>
-          Nueva Reservacion
-        </button>
       </div>
     </div>
-    
-    <!-- Tabs -->
-    <div class="tabs">
-      <button
-        @click="activeTab = 'tables'"
-        :class="['tab-btn', { 'tab-btn-active': activeTab === 'tables' }]"
-      >
-        Mapa de Mesas
-      </button>
-      <button
-        @click="activeTab = 'reservations'"
-        :class="['tab-btn', { 'tab-btn-active': activeTab === 'reservations' }]"
-      >
-        Reservaciones
-      </button>
-    </div>
-    
-    <!-- Tables Tab -->
-    <div v-if="activeTab === 'tables'" class="tables-content">
-      <!-- Stats -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <p class="stat-label">Total Mesas</p>
-          <p class="stat-value">{{ tableStats.total }}</p>
-        </div>
-        <div class="stat-card">
-          <p class="stat-label">Libres</p>
-          <p class="stat-value stat-success">{{ tableStats.available }}</p>
-        </div>
-        <div class="stat-card">
-          <p class="stat-label">Ocupadas</p>
-          <p class="stat-value stat-danger">{{ tableStats.occupied }}</p>
-        </div>
-        <div class="stat-card">
-          <p class="stat-label">Mantenimiento</p>
-          <p class="stat-value stat-warning">{{ tableStats.reserved }}</p>
-        </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <p class="stat-label">Total Mesas</p>
+        <p class="stat-value">{{ tableStats.total }}</p>
       </div>
-      
-      <!-- Tables Grid -->
-      <div class="card">
-        <h3 class="card-title">Mapa del Restaurante</h3>
-        <div class="tables-grid">
-          <div
-            v-for="table in store.tables"
-            :key="table.id"
-            :class="['table-card', `table-card-${table.estado}`]"
-          >
-            <!-- Table Number -->
-            <div class="table-visual">
-              <div :class="['table-number', `table-number-${table.estado}`]">
-                {{ table.numero }}
-              </div>
-            </div>
-            
-            <!-- Table Info -->
-            <div class="table-info">
-              <p class="table-name">Mesa {{ table.numero }}</p>
-              <div class="table-capacity">
-                <span class="material-symbols-outlined">group</span>
-                {{ table.capacidad }} personas
-              </div>
-              <span :class="['badge', getStatusInfo(table.estado).badgeClass]">
-                {{ getStatusInfo(table.estado).label }}
-              </span>
+      <div class="stat-card">
+        <p class="stat-label">Libres</p>
+        <p class="stat-value stat-success">{{ tableStats.available }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Ocupadas</p>
+        <p class="stat-value stat-danger">{{ tableStats.occupied }}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Mantenimiento</p>
+        <p class="stat-value stat-warning">{{ tableStats.reserved }}</p>
+      </div>
+    </div>
+
+    <!-- Tables Grid -->
+    <div class="card">
+      <h3 class="card-title">Mapa del Restaurante</h3>
+      <div class="tables-grid">
+        <div
+          v-for="table in store.tables"
+          :key="table.id"
+          :class="['table-card', `table-card-${table.estado}`]"
+        >
+          <div class="table-visual">
+            <div :class="['table-number', `table-number-${table.estado}`]">
+              {{ table.numero }}
             </div>
           </div>
-        </div>
-        
-        <!-- Legend -->
-        <div class="tables-legend">
-          <div class="legend-item">
-            <span class="legend-dot legend-dot-success"></span>
-            <span>Libre</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-dot legend-dot-danger"></span>
-            <span>Ocupada</span>
-          </div>
-          <div class="legend-item">
-            <span class="legend-dot legend-dot-warning"></span>
-            <span>Mantenimiento</span>
+
+          <div class="table-info">
+            <p class="table-name">Mesa {{ table.numero }}</p>
+            <div class="table-capacity">
+              <span class="material-symbols-outlined">group</span>
+              {{ table.capacidad }} personas
+            </div>
+            <span :class="['badge', getStatusInfo(table.estado).badgeClass]">
+              {{ getStatusInfo(table.estado).label }}
+            </span>
           </div>
         </div>
       </div>
-      
-      <!-- Quick Status Update -->
-      <div class="card">
-        <h3 class="card-title">Actualizar Estado Rapido</h3>
-        <div class="table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Mesa</th>
-                <th>Capacidad</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="table in store.tables" :key="table.id">
-                <td class="cell-bold">Mesa {{ table.numero }}</td>
-                <td class="cell-muted">{{ table.capacidad }} personas</td>
-                <td>
-                  <span :class="['badge', getStatusInfo(table.estado).badgeClass]">
-                    {{ getStatusInfo(table.estado).label }}
-                  </span>
-                </td>
-                <td>
-                  <div class="action-buttons">
-                    <button
-                      @click="updateTableStatus(table.id, 'libre')"
-                      :disabled="table.estado === 'libre'"
-                      :class="['action-btn', table.estado === 'libre' ? 'action-btn-active-success' : '']"
-                    >
-                      Liberar
-                    </button>
-                    <button
-                      @click="updateTableStatus(table.id, 'ocupada')"
-                      :disabled="table.estado === 'ocupada'"
-                      :class="['action-btn', table.estado === 'ocupada' ? 'action-btn-active-danger' : '']"
-                    >
-                      Ocupar
-                    </button>
-                    <button
-                      @click="updateTableStatus(table.id, 'mantenimiento')"
-                      :disabled="table.estado === 'mantenimiento'"
-                      :class="['action-btn', table.estado === 'mantenimiento' ? 'action-btn-active-warning' : '']"
-                    >
-                      Mantenimiento
-                    </button>
-                    <button
-                      v-if="isAdmin"
-                      @click="deleteTable(table.id)"
-                      class="action-btn action-btn-delete"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+
+      <div class="tables-legend">
+        <div class="legend-item">
+          <span class="legend-dot legend-dot-success"></span>
+          <span>Libre</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot legend-dot-danger"></span>
+          <span>Ocupada</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot legend-dot-warning"></span>
+          <span>Mantenimiento</span>
         </div>
       </div>
     </div>
-    
-    <!-- Reservations Tab -->
-    <div v-if="activeTab === 'reservations'" class="reservations-content">
-      <div class="card">
-        <h3 class="card-title">Reservaciones de Hoy y Pendientes</h3>
-        
-        <div v-if="todayReservations.length > 0" class="reservations-list">
-          <div
-            v-for="reservation in todayReservations"
-            :key="reservation.id"
-            class="reservation-card"
-          >
-            <div class="reservation-left">
-              <div class="reservation-avatar">{{ (reservation.cliente_nombre || 'N').charAt(0) }}</div>
-              <div class="reservation-info">
-                <p class="reservation-name">{{ reservation.cliente_nombre || 'Sin nombre' }}</p>
-                <div class="reservation-details">
-                  <span v-if="reservation.cliente_telefono" class="detail-item">
-                    <span class="material-symbols-outlined">call</span>
-                    {{ reservation.cliente_telefono }}
-                  </span>
-                  <span class="detail-item">
-                    <span class="material-symbols-outlined">group</span>
-                    {{ reservation.cantidad_personas }} personas
-                  </span>
-                  <span class="detail-item">
-                    <span class="material-symbols-outlined">schedule</span>
-                    {{ reservation.fecha_reserva }} - {{ reservation.hora_reserva }}
-                  </span>
+
+    <!-- Quick Status Update -->
+    <div class="card">
+      <h3 class="card-title">Actualizar Estado Rapido</h3>
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Mesa</th>
+              <th>Capacidad</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="table in store.tables" :key="table.id">
+              <td class="cell-bold">Mesa {{ table.numero }}</td>
+              <td class="cell-muted">{{ table.capacidad }} personas</td>
+              <td>
+                <span :class="['badge', getStatusInfo(table.estado).badgeClass]">
+                  {{ getStatusInfo(table.estado).label }}
+                </span>
+              </td>
+              <td>
+                <div class="action-buttons">
+                  <button
+                    @click="updateTableStatus(table.id, 'libre')"
+                    :disabled="table.estado === 'libre'"
+                    :class="['action-btn', table.estado === 'libre' ? 'action-btn-active-success' : '']"
+                  >
+                    Liberar
+                  </button>
+                  <button
+                    @click="updateTableStatus(table.id, 'ocupada')"
+                    :disabled="table.estado === 'ocupada'"
+                    :class="['action-btn', table.estado === 'ocupada' ? 'action-btn-active-danger' : '']"
+                  >
+                    Ocupar
+                  </button>
+                  <button
+                    @click="updateTableStatus(table.id, 'mantenimiento')"
+                    :disabled="table.estado === 'mantenimiento'"
+                    :class="['action-btn', table.estado === 'mantenimiento' ? 'action-btn-active-warning' : '']"
+                  >
+                    Mantenimiento
+                  </button>
+                  <button
+                    v-if="isAdmin"
+                    @click="deleteTable(table.id)"
+                    class="action-btn action-btn-delete"
+                  >
+                    Eliminar
+                  </button>
                 </div>
-                <p v-if="reservation.observaciones" class="reservation-notes">{{ reservation.observaciones }}</p>
-              </div>
-            </div>
-            
-            <div class="reservation-right">
-              <span :class="['badge', getReservationStatusInfo(reservation.estado).badgeClass]">
-                {{ getReservationStatusInfo(reservation.estado).label }}
-              </span>
-              <div v-if="reservation.estado === 'pendiente'" class="reservation-actions">
-                <button @click="confirmReservation(reservation.id)" class="btn btn-primary btn-sm">
-                  Confirmar
-                </button>
-                <button @click="cancelReservation(reservation.id)" class="btn btn-secondary btn-sm">
-                  Cancelar
-                </button>
-              </div>
-              <div v-if="reservation.mesa_numero" class="reservation-table">
-                Mesa {{ reservation.mesa_numero }}
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div v-else class="empty-state">
-          <span class="material-symbols-outlined empty-icon">calendar_month</span>
-          <p>No hay reservaciones para hoy</p>
-        </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -498,94 +273,6 @@ const todayReservations = computed(() => {
         </div>
       </div>
     </Teleport>
-
-    <!-- Reservation Modal -->
-    <Teleport to="body">
-      <div v-if="showReservationModal" class="modal-overlay">
-        <div @click="showReservationModal = false" class="modal-backdrop"></div>
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2 class="modal-title">Nueva Reservacion</h2>
-            <button @click="showReservationModal = false" class="modal-close">
-              <span class="material-symbols-outlined">close</span>
-            </button>
-          </div>
-          
-          <form @submit.prevent="saveReservation" class="modal-form">
-            <div class="form-group">
-              <label class="form-label">Cliente</label>
-              <div class="customer-selector">
-                <select v-if="!showNewCustomerForm" v-model="reservationForm.cliente_id" class="input">
-                  <option value="">Sin cliente</option>
-                  <option v-for="customer in store.customers" :key="customer.id" :value="customer.id">
-                    {{ customer.nombre }} ({{ customer.telefono }})
-                  </option>
-                </select>
-                <div v-else class="new-customer-form">
-                  <input v-model="newCustomerForm.nombre" type="text" class="input" placeholder="Nombre" />
-                  <input v-model="newCustomerForm.telefono" type="text" class="input" placeholder="Telefono" />
-                  <input v-model="newCustomerForm.email" type="email" class="input" placeholder="Email (opcional)" />
-                  <button type="button" @click="createNewCustomer" class="btn btn-primary btn-sm">Crear</button>
-                  <button type="button" @click="showNewCustomerForm = false" class="btn btn-secondary btn-sm">Cancelar</button>
-                </div>
-                <button v-if="!showNewCustomerForm" type="button" @click="showNewCustomerForm = true" class="btn btn-secondary btn-sm">+ Nuevo</button>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Mesa</label>
-              <select v-model="reservationForm.mesa_id" class="input" required>
-                <option value="" disabled>Selecciona una mesa</option>
-                <option v-for="table in store.tables" :key="table.id" :value="table.id">
-                  Mesa {{ table.numero }} ({{ table.capacidad }} personas)
-                </option>
-              </select>
-            </div>
-
-            <div class="form-row-3">
-              <FormField
-                v-model="reservationForm.cantidad_personas"
-                label="Personas"
-                type="number"
-                min="1"
-                max="20"
-                required
-                :error="getReservationError('cantidad_personas')"
-                @blur="touchReservationField('cantidad_personas')"
-              />
-              <FormField
-                v-model="reservationForm.fecha_reserva"
-                label="Fecha"
-                type="date"
-                required
-                :error="getReservationError('fecha_reserva')"
-                @blur="touchReservationField('fecha_reserva')"
-              />
-              <FormField
-                v-model="reservationForm.hora_reserva"
-                label="Hora"
-                type="time"
-                required
-                :error="getReservationError('hora_reserva')"
-                @blur="touchReservationField('hora_reserva')"
-              />
-            </div>
-
-            <FormField
-              v-model="reservationForm.observaciones"
-              label="Notas"
-              type="textarea"
-              placeholder="Ocasion especial, preferencias, etc."
-            />
-            
-            <div class="modal-actions">
-              <button type="button" @click="showReservationModal = false" class="btn btn-secondary">Cancelar</button>
-              <button type="submit" class="btn btn-primary">Guardar Reservacion</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -622,38 +309,9 @@ const todayReservations = computed(() => {
   color: var(--on-surface-variant);
 }
 
-.tabs {
+.header-actions {
   display: flex;
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--outline-variant);
-}
-
-.tab-btn {
-  padding: 0.75rem 1rem;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--on-surface-variant);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.tab-btn:hover {
-  color: var(--on-surface);
-}
-
-.tab-btn-active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
-}
-
-.tables-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.75rem;
 }
 
 .stats-grid {
@@ -874,6 +532,7 @@ const todayReservations = computed(() => {
 .action-buttons {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .action-btn {
@@ -920,229 +579,6 @@ const todayReservations = computed(() => {
   background: rgba(239, 68, 68, 0.1);
 }
 
-.action-buttons {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.reservations-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.reservations-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.reservation-card {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
-  background: var(--surface-container);
-  border-radius: var(--radius-lg);
-}
-
-@media (min-width: 640px) {
-  .reservation-card {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
-}
-
-.reservation-left {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-}
-
-.reservation-avatar {
-  width: 3rem;
-  height: 3rem;
-  border-radius: var(--radius-full);
-  background: rgba(0, 52, 43, 0.1);
-  color: var(--primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.reservation-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.reservation-info .reservation-name {
-  font-weight: 500;
-  color: var(--on-surface);
-}
-
-.reservation-details {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.detail-item {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--on-surface-variant);
-}
-
-.detail-item .material-symbols-outlined {
-  font-size: 0.875rem;
-}
-
-.reservation-notes {
-  font-size: 0.75rem;
-  color: var(--primary);
-  margin-top: 0.25rem;
-}
-
-.reservation-right {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-@media (min-width: 640px) {
-  .reservation-right {
-    align-items: flex-end;
-  }
-}
-
-.reservation-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.reservation-table {
-  font-size: 0.875rem;
-  color: var(--on-surface-variant);
-}
-
-.empty-state {
-  text-align: center;
-  padding: 3rem;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  color: var(--outline-variant);
-  margin-bottom: 1rem;
-}
-
-.empty-state p {
-  color: var(--on-surface-variant);
-}
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
-.modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-}
-
-.modal-content {
-  position: relative;
-  background: var(--surface-container-lowest);
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-2xl);
-  width: 100%;
-  max-width: 32rem;
-  padding: 1.5rem;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
-}
-
-.modal-title {
-  font-family: var(--font-headline);
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--on-surface);
-}
-
-.modal-close {
-  padding: 0.5rem;
-  background: transparent;
-  border: none;
-  color: var(--on-surface-variant);
-  cursor: pointer;
-  border-radius: var(--radius);
-  transition: color var(--transition-base);
-}
-
-.modal-close:hover {
-  color: var(--on-surface);
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--on-surface-variant);
-}
-
-.form-row-3 {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-}
-
-.textarea {
-  min-height: 80px;
-  resize: vertical;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.modal-actions .btn {
-  flex: 1;
-}
-
 .badge {
   display: inline-flex;
   padding: 0.25rem 0.5rem;
@@ -1166,16 +602,6 @@ const todayReservations = computed(() => {
 .badge-danger {
   background: rgba(239, 68, 68, 0.15);
   color: var(--danger);
-}
-
-.badge-info {
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
-}
-
-.badge-muted {
-  background: rgba(112, 121, 117, 0.15);
-  color: var(--outline);
 }
 
 .btn {
@@ -1254,28 +680,73 @@ const todayReservations = computed(() => {
   color: var(--outline);
 }
 
-.customer-selector {
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
   display: flex;
-  gap: 0.5rem;
   align-items: center;
+  justify-content: center;
+  padding: 1rem;
 }
 
-.customer-selector .input {
-  flex: 1;
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
 }
 
-.new-customer-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
-
-.new-customer-form .input {
+.modal-content {
+  position: relative;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-2xl);
   width: 100%;
+  max-width: 32rem;
+  padding: 1.5rem;
 }
 
-.new-customer-form button {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.625rem;
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.modal-title {
+  font-family: var(--font-headline);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.modal-close {
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: color var(--transition-base);
+}
+
+.modal-close:hover {
+  color: var(--on-surface);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.modal-actions .btn {
+  flex: 1;
 }
 </style>

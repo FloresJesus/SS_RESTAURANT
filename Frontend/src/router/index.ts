@@ -9,15 +9,16 @@ import EmployeesView from "@/views/EmployeesView.vue"
 import AdminLayout from "@/layouts/AdminLayout.vue"
 import CustomersView from "@/views/CustomersView.vue"
 import ReservationView from "@/views/ReservationView.vue"
+import ReservationsView from "@/views/ReservationsView.vue"
 import SettingsView from "@/views/SettingsView.vue"
 import AuditView from "@/views/AuditView.vue"
 
 type UserRole = 'admin' | 'cajero' | 'mesero' | 'cocina'
 
 const ROLE_ACCESS: Record<string, string[]> = {
-  admin: ["dashboard", "customers", "menu", "orders", "tables", "employees", "settings", "audit"],
+  admin: ["dashboard", "customers", "menu", "orders", "tables", "reservations", "employees", "settings", "audit"],
   cajero: ["dashboard", "orders", "payments"],
-  mesero: ["dashboard", "customers", "menu", "orders", "tables"],
+  mesero: ["dashboard", "customers", "menu", "orders", "tables", "reservations"],
   cocina: ["dashboard", "orders"]
 }
 
@@ -64,6 +65,11 @@ const router = createRouter({
         {
           path: "tables",
           component: TablesView,
+          meta: { roles: ["admin", "cajero", "mesero"] }
+        },
+        {
+          path: "reservations",
+          component: ReservationsView,
           meta: { roles: ["admin", "cajero", "mesero"] }
         },
         {
