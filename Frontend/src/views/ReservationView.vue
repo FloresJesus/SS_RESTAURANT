@@ -14,10 +14,13 @@ const form = ref({
   telefono: '',
   correo: '',
   fecha: '',
-  hora: '',
+  hora_inicio: '',
+  duracion: 120,
   personas: 1,
   notas: ''
 })
+
+const durationOptions = [30, 60, 90, 120, 150, 180, 240]
 
 const submitting = ref(false)
 const success = ref(false)
@@ -44,9 +47,9 @@ const { validateField, touchField, validateAll, getError, resetValidation } = us
     rules: [required('La fecha es obligatoria')],
     value: computed(() => form.value.fecha)
   },
-  hora: {
+  hora_inicio: {
     rules: [required('La hora es obligatoria')],
-    value: computed(() => form.value.hora)
+    value: computed(() => form.value.hora_inicio)
   },
   personas: {
     rules: [required(), min(1, 'Minimo 1 persona'), max(20, 'Maximo 20 personas')],
@@ -62,17 +65,29 @@ const submitReservation = async () => {
   success.value = false
 
   try {
+    const buildEnd = (fecha, inicio, dur) => {
+      const [h, m] = inicio.split(':').map(Number)
+      const d = new Date(`${fecha}T${inicio}`)
+      d.setMinutes(d.getMinutes() + dur)
+      const pad = (n) => String(n).padStart(2, '0')
+      return `${fecha}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    }
+
+    const fechaInicio = `${form.value.fecha}T${form.value.hora_inicio}`
+    const fechaFin = buildEnd(form.value.fecha, form.value.hora_inicio, form.value.duracion)
+
     const response = await fetch(`${API_BASE}/public/reservations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         nombre: form.value.nombre.trim(),
         telefono: form.value.telefono.trim(),
-        correo: form.value.correo.trim() || null,
-        fecha: form.value.fecha,
-        hora: form.value.hora,
-        personas: Number(form.value.personas),
-        notas: form.value.notas.trim() || null
+        email: form.value.correo.trim() || null,
+        mesa_id: null,
+        fecha_hora_inicio: fechaInicio,
+        fecha_hora_fin: fechaFin,
+        cantidad_personas: Number(form.value.personas),
+        observaciones: form.value.notas.trim() || null
       })
     })
 
@@ -85,7 +100,7 @@ const submitReservation = async () => {
 
     success.value = true
     assignedTable.value = data.mesa || ''
-    form.value = { nombre: '', telefono: '', correo: '', fecha: '', hora: '', personas: 1, notas: '' }
+    form.value = { nombre: '', telefono: '', correo: '', fecha: '', hora_inicio: '', duracion: 120, personas: 1, notas: '' }
   } catch {
     error.value = 'Error de conexion con el servidor'
   } finally {
@@ -166,16 +181,22 @@ const submitReservation = async () => {
               @blur="touchField('fecha')"
             />
             <FormField
-              v-model="form.hora"
+              v-model="form.hora_inicio"
               label="Hora"
               type="select"
               placeholder="Selecciona un horario"
               required
-              :error="getError('hora')"
-              @blur="touchField('hora')"
+              :error="getError('hora_inicio')"
+              @blur="touchField('hora_inicio')"
             >
               <option v-for="hour in openHours" :key="hour" :value="hour">{{ hour }}</option>
             </FormField>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Duracion estimada</label>
+            <select v-model="form.duracion" class="input">
+              <option v-for="d in durationOptions" :key="d" :value="d">{{ d }} minutos</option>
+            </select>
           </div>
           <FormField
             v-model.number="form.personas"

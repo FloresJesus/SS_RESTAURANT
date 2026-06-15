@@ -142,12 +142,39 @@ const createNewOrder = async (req, res) => {
       throw new Error("Mesa no encontrada")
     }
 
+    let effectiveReservaId = reserva_id
+    let effectiveClienteId = cliente_id
+
+    if (!effectiveReservaId) {
+      const [reservasHoy] = await connection.query(
+         `SELECT id, cliente_id FROM reserva
+          WHERE mesa_id = ? AND DATE(fecha_hora_inicio) = CURDATE()
+          AND estado IN ('confirmada', 'pendiente')
+          ORDER BY estado = 'confirmada' DESC, fecha_hora_inicio ASC
+          LIMIT 1`,
+        [mesa_id]
+      )
+      if (reservasHoy[0]) {
+        effectiveReservaId = reservasHoy[0].id
+        if (!effectiveClienteId && reservasHoy[0].cliente_id) {
+          effectiveClienteId = reservasHoy[0].cliente_id
+        }
+      }
+    }
+
     const [result] = await connection.query(
       `INSERT INTO pedido (cliente_id, reserva_id, mesa_id, mesero_id, observaciones)
        VALUES (?, ?, ?, ?, ?)`,
-      [cliente_id, reserva_id, mesa_id, mesero_id, observaciones]
+      [effectiveClienteId, effectiveReservaId, mesa_id, mesero_id, observaciones]
     )
     const orderId = result.insertId
+
+    if (effectiveReservaId) {
+      await connection.query(
+        `UPDATE reserva SET estado = 'completada' WHERE id = ? AND estado != 'completada'`,
+        [effectiveReservaId]
+      )
+    }
 
     let total = 0
     for (const item of items) {

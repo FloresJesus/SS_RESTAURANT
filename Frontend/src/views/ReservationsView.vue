@@ -2,26 +2,57 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { useAuthStore } from '@/stores/auth'
+import { useUsersStore } from '@/stores/users'
 import { required, min, max } from '@/utils/validators'
 import { useFormValidation } from '@/composables/useFormValidation'
 import FormField from '@/components/FormField.vue'
 
 const store = useRestaurantStore()
 const authStore = useAuthStore()
+const usersStore = useUsersStore()
 
 const userRole = computed(() => authStore.user?.rol || '')
 const isAdmin = computed(() => userRole.value === 'admin')
 
 const showReservationModal = ref(false)
+const showConvertModal = ref(false)
+const convertingReservation = ref(null)
 
 const reservationForm = ref({
   cliente_id: null,
   mesa_id: null,
   cantidad_personas: 2,
-  fecha_reserva: '',
-  hora_reserva: '19:00',
+  fecha: '',
+  hora_inicio: '19:00',
+  duracion: 120,
   observaciones: ''
 })
+
+const convertForm = ref({
+  mesero_id: authStore.user?.id || null,
+  observaciones: '',
+  metodo_pago: '',
+  items: [
+    { producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' }
+  ]
+})
+
+const menuOptions = computed(() =>
+  store.menuItems.filter(m => m.disponible).map(m => ({
+    id: m.id,
+    name: `${m.nombre} (Bs ${Number(m.precio).toFixed(2)})`,
+    price: Number(m.precio)
+  }))
+)
+
+const meserosOptions = computed(() =>
+  usersStore.users.filter(u => u.rol === 'mesero' || u.rol === 'admin').map(u => ({
+    id: u.id,
+    name: `${u.nombre} ${u.apellido || ''}`.trim()
+  }))
+)
+
+const paymentMethods = ['efectivo', 'tarjeta', 'qr', 'transferencia']
 
 const newCustomerForm = ref({
   nombre: '',
@@ -35,15 +66,26 @@ const { validateField: validateReservationField, touchField: touchReservationFie
     rules: [required(), min(1, 'Minimo 1 persona'), max(20, 'Maximo 20 personas')],
     value: computed(() => reservationForm.value.cantidad_personas)
   },
-  fecha_reserva: {
+  fecha: {
     rules: [required('La fecha es obligatoria')],
-    value: computed(() => reservationForm.value.fecha_reserva)
+    value: computed(() => reservationForm.value.fecha)
   },
-  hora_reserva: {
+  hora_inicio: {
     rules: [required('La hora es obligatoria')],
-    value: computed(() => reservationForm.value.hora_reserva)
+    value: computed(() => reservationForm.value.hora_inicio)
   }
 })
+
+const formatDateTime = (dt) => {
+  if (!dt) return ''
+  const datePart = typeof dt === 'string' ? dt.split('T')[0] : dt
+  const d = new Date(datePart + 'T12:00:00')
+  const dateStr = d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+  const timePart = typeof dt === 'string' && dt.includes('T') ? dt.split('T')[1] : ''
+  return timePart ? `${dateStr} ${timePart}` : dateStr
+}
+
+const durationOptions = [30, 60, 90, 120, 150, 180, 240]
 
 const getReservationStatusInfo = (status) => {
   const info = {
@@ -61,8 +103,9 @@ const openReservationModal = () => {
     cliente_id: null,
     mesa_id: null,
     cantidad_personas: 2,
-    fecha_reserva: new Date().toISOString().split('T')[0],
-    hora_reserva: '19:00',
+    fecha: new Date().toISOString().split('T')[0],
+    hora_inicio: '19:00',
+    duracion: 120,
     observaciones: ''
   }
   showNewCustomerForm.value = false
@@ -93,6 +136,14 @@ const createNewCustomer = async () => {
   }
 }
 
+const buildFechaHoraFin = (fecha, horaInicio, duracionMinutos) => {
+  const [h, m] = horaInicio.split(':').map(Number)
+  const start = new Date(`${fecha}T${horaInicio}`)
+  start.setMinutes(start.getMinutes() + duracionMinutos)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${fecha}T${pad(start.getHours())}:${pad(start.getMinutes())}`
+}
+
 const saveReservation = async () => {
   if (!reservationForm.value.mesa_id) {
     alert('Debe seleccionar una mesa')
@@ -100,13 +151,20 @@ const saveReservation = async () => {
   }
   if (!validateReservation()) return
 
+  const fechaInicio = `${reservationForm.value.fecha}T${reservationForm.value.hora_inicio}`
+  const fechaFin = buildFechaHoraFin(
+    reservationForm.value.fecha,
+    reservationForm.value.hora_inicio,
+    reservationForm.value.duracion
+  )
+
   try {
     await store.createReservation({
       cliente_id: reservationForm.value.cliente_id || null,
       mesa_id: reservationForm.value.mesa_id,
       cantidad_personas: reservationForm.value.cantidad_personas,
-      fecha_reserva: reservationForm.value.fecha_reserva,
-      hora_reserva: reservationForm.value.hora_reserva,
+      fecha_hora_inicio: fechaInicio,
+      fecha_hora_fin: fechaFin,
       observaciones: reservationForm.value.observaciones || null
     })
     showReservationModal.value = false
@@ -144,9 +202,81 @@ const markNoShow = async (id) => {
   }
 }
 
+const openConvertModal = (reservation) => {
+  convertingReservation.value = reservation
+  convertForm.value = {
+    mesero_id: authStore.user?.id || null,
+    observaciones: '',
+    metodo_pago: '',
+    items: [{ producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' }]
+  }
+  showConvertModal.value = true
+}
+
+const closeConvertModal = () => {
+  showConvertModal.value = false
+  convertingReservation.value = null
+}
+
+const addConvertItemRow = () => {
+  convertForm.value.items.push({ producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' })
+}
+
+const removeConvertItemRow = (idx) => {
+  if (convertForm.value.items.length > 1) {
+    convertForm.value.items.splice(idx, 1)
+  }
+}
+
+const updateConvertItemPrice = (idx) => {
+  const selected = store.menuItems.find(m => m.id === convertForm.value.items[idx].producto_id)
+  if (selected) {
+    convertForm.value.items[idx].precio_unitario = Number(selected.precio)
+  }
+}
+
+const submitConvertToOrder = async () => {
+  if (!convertForm.value.mesero_id) {
+    alert('Debe seleccionar un mesero')
+    return
+  }
+
+  const validItems = convertForm.value.items
+    .filter((item) => item.producto_id && item.cantidad > 0)
+    .map((item) => ({
+      producto_id: Number(item.producto_id),
+      cantidad: Number(item.cantidad),
+      precio_unitario: Number(item.precio_unitario),
+      observaciones: item.observaciones || null
+    }))
+
+  if (validItems.length === 0) {
+    alert('Al menos un producto es obligatorio')
+    return
+  }
+
+  try {
+    const payload = {
+      mesero_id: convertForm.value.mesero_id,
+      observaciones: convertForm.value.observaciones || null,
+      metodo_pago: convertForm.value.metodo_pago || null,
+      items: validItems
+    }
+
+    await store.convertirReservaAPedido(convertingReservation.value.id, payload)
+    closeConvertModal()
+  } catch (error) {
+    alert('Error al crear pedido: ' + (error.message || 'Error desconocido'))
+  }
+}
+
+const todayStr = computed(() => new Date().toISOString().split('T')[0])
+
 const todayReservations = computed(() => {
-  const today = new Date().toISOString().split('T')[0]
-  return store.reservations.filter(r => r.fecha_reserva === today || r.estado === 'pendiente')
+  return store.reservations.filter(r =>
+    (r.fecha_hora_inicio && r.fecha_hora_inicio.startsWith(todayStr.value)) ||
+    r.estado === 'pendiente'
+  )
 })
 
 const stats = computed(() => ({
@@ -160,6 +290,8 @@ onMounted(async () => {
   await store.loadReservations()
   await store.loadTables()
   await store.loadCustomers()
+  await store.loadMenuItems()
+  await usersStore.fetchUsers()
 })
 </script>
 
@@ -223,8 +355,13 @@ onMounted(async () => {
                   {{ reservation.cantidad_personas }} personas
                 </span>
                 <span class="detail-item">
+                  <span class="material-symbols-outlined">calendar_month</span>
+                  {{ formatDateTime(reservation.fecha_hora_inicio) }}
+                </span>
+                <span class="detail-item">
                   <span class="material-symbols-outlined">schedule</span>
-                  {{ reservation.fecha_reserva }} - {{ reservation.hora_reserva }}
+                  {{ reservation.fecha_hora_inicio.split('T')[1] }} -
+                  {{ reservation.fecha_hora_fin.split('T')[1] }}
                 </span>
               </div>
               <p v-if="reservation.observaciones" class="reservation-notes">{{ reservation.observaciones }}</p>
@@ -238,6 +375,14 @@ onMounted(async () => {
             <div v-if="reservation.estado === 'pendiente'" class="reservation-actions">
               <button @click="confirmReservation(reservation.id)" class="btn btn-primary btn-sm">
                 Confirmar
+              </button>
+              <button @click="cancelReservation(reservation.id)" class="btn btn-secondary btn-sm">
+                Cancelar
+              </button>
+            </div>
+            <div v-if="reservation.estado === 'confirmada'" class="reservation-actions">
+              <button @click="openConvertModal(reservation)" class="btn btn-success btn-sm">
+                Crear Pedido
               </button>
               <button @click="cancelReservation(reservation.id)" class="btn btn-secondary btn-sm">
                 Cancelar
@@ -311,21 +456,27 @@ onMounted(async () => {
                 @blur="touchReservationField('cantidad_personas')"
               />
               <FormField
-                v-model="reservationForm.fecha_reserva"
+                v-model="reservationForm.fecha"
                 label="Fecha"
                 type="date"
                 required
-                :error="getReservationError('fecha_reserva')"
-                @blur="touchReservationField('fecha_reserva')"
+                :error="getReservationError('fecha')"
+                @blur="touchReservationField('fecha')"
               />
               <FormField
-                v-model="reservationForm.hora_reserva"
-                label="Hora"
+                v-model="reservationForm.hora_inicio"
+                label="Hora inicio"
                 type="time"
                 required
-                :error="getReservationError('hora_reserva')"
-                @blur="touchReservationField('hora_reserva')"
+                :error="getReservationError('hora_inicio')"
+                @blur="touchReservationField('hora_inicio')"
               />
+              <div class="form-group">
+                <label class="form-label">Duracion</label>
+                <select v-model="reservationForm.duracion" class="input">
+                  <option v-for="d in durationOptions" :key="d" :value="d">{{ d }} min</option>
+                </select>
+              </div>
             </div>
 
             <FormField
@@ -338,6 +489,85 @@ onMounted(async () => {
             <div class="modal-actions">
               <button type="button" @click="showReservationModal = false" class="btn btn-secondary">Cancelar</button>
               <button type="submit" class="btn btn-primary">Guardar Reservacion</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Convert to Order Modal -->
+    <Teleport to="body">
+      <div v-if="showConvertModal" class="modal-overlay">
+        <div @click="closeConvertModal" class="modal-backdrop"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title">Crear Pedido - {{ convertingReservation?.cliente_nombre || 'Reservacion' }}</h2>
+            <button @click="closeConvertModal" class="modal-close">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <form @submit.prevent="submitConvertToOrder" class="modal-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Mesero</label>
+                <select v-model="convertForm.mesero_id" class="input" required>
+                  <option value="" disabled>Selecciona un mesero</option>
+                  <option v-for="m in meserosOptions" :key="m.id" :value="m.id">
+                    {{ m.name }}
+                  </option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Metodo de pago</label>
+                <select v-model="convertForm.metodo_pago" class="input">
+                  <option value="">Seleccionar (opcional)</option>
+                  <option v-for="method in paymentMethods" :key="method" :value="method">
+                    {{ method.charAt(0).toUpperCase() + method.slice(1) }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Productos</label>
+              <div class="order-items-form">
+                <div class="order-item-row order-item-header">
+                  <span>Producto</span>
+                  <span>Cantidad</span>
+                  <span>Precio</span>
+                  <span>Notas</span>
+                  <span></span>
+                </div>
+                <div v-for="(item, index) in convertForm.items" :key="index" class="order-item-row">
+                  <select v-model="item.producto_id" @change="updateConvertItemPrice(index)" class="input">
+                    <option value="" disabled>Selecciona un producto</option>
+                    <option v-for="menuItem in menuOptions" :key="menuItem.id" :value="menuItem.id">
+                      {{ menuItem.name }}
+                    </option>
+                  </select>
+                  <input v-model="item.cantidad" type="number" min="1" class="input item-input" placeholder="Cant." />
+                  <input v-model="item.precio_unitario" type="number" min="0" step="0.01" class="input item-input" placeholder="Precio" />
+                  <input v-model="item.observaciones" type="text" class="input item-input" placeholder="Notas" />
+                  <button type="button" @click="removeConvertItemRow(index)" class="btn btn-secondary btn-sm">X</button>
+                </div>
+              </div>
+              <button type="button" @click="addConvertItemRow" class="btn btn-primary btn-sm">Agregar item</button>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Mesa</label>
+              <p class="form-static">Mesa {{ convertingReservation?.mesa_numero }} - {{ convertingReservation?.cantidad_personas }} personas</p>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Observaciones</label>
+              <input v-model="convertForm.observaciones" type="text" class="input" placeholder="Notas para el pedido..." />
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" @click="closeConvertModal" class="btn btn-secondary">Cancelar</button>
+              <button type="submit" class="btn btn-success">Crear Pedido</button>
             </div>
           </form>
         </div>
@@ -615,6 +845,12 @@ onMounted(async () => {
   gap: 1rem;
 }
 
+.form-row-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
 .modal-actions {
   display: flex;
   gap: 0.75rem;
@@ -759,5 +995,50 @@ onMounted(async () => {
 
 .input::placeholder {
   color: var(--outline);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--success) 0%, #2dd4a0 100%);
+  color: white;
+}
+
+.btn-success:hover {
+  transform: scale(1.01);
+}
+
+.order-items-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.order-item-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.6fr 0.8fr 1.2fr auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.order-item-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--on-surface-variant);
+}
+
+.order-item-row .input {
+  width: 100%;
+}
+
+.item-input {
+  width: 100%;
+}
+
+.form-static {
+  font-size: 0.875rem;
+  color: var(--on-surface);
+  padding: 0.75rem 1rem;
+  background: var(--surface-container);
+  border-radius: var(--radius);
 }
 </style>

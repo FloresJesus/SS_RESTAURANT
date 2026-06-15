@@ -1,3 +1,4 @@
+const db = require("../config/db")
 const { logAudit } = require("../utils/auditLogger")
 const {
   showReservations,
@@ -9,13 +10,18 @@ const {
   deleteReservation,
   getReservationsByDate,
   getAvailableTablesForReservation,
-  getPendingReservations
+  getPendingReservations,
+  findReservationsByTableAndDate,
+  markExpiredNoShow,
+  checkTableAvailability
 } = require("../models/reservationModels")
+const { updateTableStatus, findTableById } = require("../models/tableModels")
 
 const getReservations = async (req, res) => {
   const { fecha } = req.query
 
   try {
+    await markExpiredNoShow()
     let reservations
     if (fecha) {
       reservations = await getReservationsByDate(fecha)
@@ -55,16 +61,16 @@ const getPendingReservationsList = async (req, res) => {
 }
 
 const getAvailableTables = async (req, res) => {
-  const { fecha_reserva, hora_reserva, cantidad_personas } = req.query
+  const { fecha_hora_inicio, fecha_hora_fin, cantidad_personas } = req.query
 
-  if (!fecha_reserva || !cantidad_personas) {
-    return res.status(400).json({ message: "Fecha y cantidad de personas son obligatorios" })
+  if (!fecha_hora_inicio || !fecha_hora_fin || !cantidad_personas) {
+    return res.status(400).json({ message: "fecha_hora_inicio, fecha_hora_fin y cantidad_personas son obligatorios" })
   }
 
   try {
     const tables = await getAvailableTablesForReservation(
-      fecha_reserva,
-      hora_reserva || '19:00',
+      fecha_hora_inicio,
+      fecha_hora_fin,
       Number(cantidad_personas)
     )
     res.json(tables)
@@ -79,24 +85,29 @@ const createNewReservation = async (req, res) => {
     cliente_id,
     mesa_id,
     cantidad_personas,
-    fecha_reserva,
-    hora_reserva,
+    fecha_hora_inicio,
+    fecha_hora_fin,
     observaciones = null
   } = req.body
 
-  if (!mesa_id || !fecha_reserva || !hora_reserva || !cantidad_personas) {
+  if (!mesa_id || !fecha_hora_inicio || !fecha_hora_fin || !cantidad_personas) {
     return res.status(400).json({
-      message: "Mesa, fecha, hora y cantidad de personas son obligatorios"
+      message: "Mesa, fecha_hora_inicio, fecha_hora_fin y cantidad de personas son obligatorios"
     })
   }
 
   try {
+    const disponible = await checkTableAvailability(mesa_id, fecha_hora_inicio, fecha_hora_fin)
+    if (!disponible) {
+      return res.status(409).json({ message: "La mesa ya esta reservada en ese horario" })
+    }
+
     const result = await createReservation(
       cliente_id || null,
       mesa_id,
       Number(cantidad_personas),
-      fecha_reserva,
-      hora_reserva,
+      fecha_hora_inicio,
+      fecha_hora_fin,
       'pendiente',
       observaciones
     )
@@ -116,13 +127,13 @@ const updateExistingReservation = async (req, res) => {
   const {
     mesa_id,
     cantidad_personas,
-    fecha_reserva,
-    hora_reserva,
+    fecha_hora_inicio,
+    fecha_hora_fin,
     estado,
     observaciones = null
   } = req.body
 
-  if (!mesa_id || !fecha_reserva || !hora_reserva || !cantidad_personas || !estado) {
+  if (!mesa_id || !fecha_hora_inicio || !fecha_hora_fin || !cantidad_personas || !estado) {
     return res.status(400).json({
       message: "Todos los campos son obligatorios"
     })
@@ -139,12 +150,17 @@ const updateExistingReservation = async (req, res) => {
       return res.status(404).json({ message: "Reservacion no encontrada" })
     }
 
+    const disponible = await checkTableAvailability(mesa_id, fecha_hora_inicio, fecha_hora_fin, Number(id))
+    if (!disponible) {
+      return res.status(409).json({ message: "La mesa ya esta reservada en ese horario" })
+    }
+
     await updateReservation(
       id,
       mesa_id,
       Number(cantidad_personas),
-      fecha_reserva,
-      hora_reserva,
+      fecha_hora_inicio,
+      fecha_hora_fin,
       estado,
       observaciones
     )
@@ -176,11 +192,132 @@ const updateReservationState = async (req, res) => {
     }
 
     await updateReservationStatus(id, estado)
+
+    const mesaId = existingReservation.mesa_id
+
+    if (estado === 'cancelada' || estado === 'no_asistio') {
+      const [activeOrders] = await db.query(
+        `SELECT COUNT(*) AS count FROM pedido
+         WHERE mesa_id = ? AND estado_servicio IN ('pendiente', 'preparando', 'listo')`,
+        [mesaId]
+      )
+      if (Number(activeOrders[0].count) === 0) {
+        await updateTableStatus(mesaId, 'libre')
+      }
+    }
+
     await logAudit(req.user.id, 'ACTUALIZAR', 'reservaciones', Number(id), `Estado reservacion ${id} cambiado a ${estado}`, req.ip)
     res.json({ message: "Estado de reservacion actualizado correctamente" })
   } catch (error) {
     console.error("Error al actualizar estado de la reservacion:", error)
     res.status(500).json({ message: "Error al actualizar estado de la reservacion" })
+  }
+}
+
+const convertReservationToOrder = async (req, res) => {
+  const { id } = req.params
+  const { mesero_id, items = [], observaciones = null, metodo_pago = null } = req.body
+
+  if (!mesero_id) {
+    return res.status(400).json({ message: "Mesero es obligatorio" })
+  }
+
+  if (!items || items.length === 0) {
+    return res.status(400).json({ message: "Al menos un producto es obligatorio" })
+  }
+
+  const connection = await db.getConnection()
+
+  try {
+    await connection.beginTransaction()
+
+    const [reservationRows] = await connection.query(
+      `SELECT id, cliente_id, mesa_id, cantidad_personas, estado FROM reserva WHERE id = ?`,
+      [id]
+    )
+    if (!reservationRows[0]) {
+      throw new Error("Reservacion no encontrada")
+    }
+    if (reservationRows[0].estado !== 'confirmada' && reservationRows[0].estado !== 'pendiente') {
+      throw new Error("La reservacion debe estar confirmada o pendiente para crear un pedido")
+    }
+
+    const reservation = reservationRows[0]
+
+    const [tableData] = await connection.query(
+      `SELECT id, estado FROM mesa WHERE id = ?`,
+      [reservation.mesa_id]
+    )
+    if (!tableData[0]) {
+      throw new Error("Mesa no encontrada")
+    }
+
+    const [orderResult] = await connection.query(
+      `INSERT INTO pedido (cliente_id, reserva_id, mesa_id, mesero_id, observaciones)
+       VALUES (?, ?, ?, ?, ?)`,
+      [reservation.cliente_id, reservation.id, reservation.mesa_id, mesero_id, observaciones]
+    )
+    const orderId = orderResult.insertId
+
+    let total = 0
+    for (const item of items) {
+      if (!item.producto_id || !item.cantidad) continue
+
+      const [productData] = await connection.query(
+        `SELECT precio FROM producto WHERE id = ?`,
+        [item.producto_id]
+      )
+      if (!productData[0]) continue
+
+      const precioUnitario = item.precio_unitario || productData[0].precio
+      const subtotal = item.cantidad * precioUnitario
+      total += subtotal
+
+      await connection.query(
+        `INSERT INTO detalle_pedido (pedido_id, producto_id, cantidad, precio_unitario, subtotal, observaciones)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [orderId, item.producto_id, item.cantidad, precioUnitario, subtotal, item.observaciones || null]
+      )
+    }
+
+    if (metodo_pago) {
+      const validMethods = ['efectivo', 'tarjeta', 'qr', 'transferencia']
+      if (!validMethods.includes(metodo_pago)) {
+        throw new Error('Metodo de pago invalido')
+      }
+      await connection.query(
+        `INSERT INTO pago (pedido_id, metodo, monto) VALUES (?, ?, ?)`,
+        [orderId, metodo_pago, total]
+      )
+      await connection.query(
+        `UPDATE pedido SET estado_pago = 'pagado' WHERE id = ?`,
+        [orderId]
+      )
+    }
+
+    await connection.query(
+      `UPDATE reserva SET estado = 'completada' WHERE id = ?`,
+      [id]
+    )
+
+    await connection.query(
+      `UPDATE mesa SET estado = 'ocupada' WHERE id = ?`,
+      [reservation.mesa_id]
+    )
+
+    await connection.commit()
+
+    await logAudit(req.user.id, 'CREAR', 'pedidos', orderId, `Pedido ${orderId} creado desde reserva ${id}`, req.ip)
+    res.status(201).json({
+      id: orderId,
+      message: "Pedido creado correctamente desde la reservacion"
+    })
+  } catch (error) {
+    await connection.rollback()
+    console.error("Error al convertir reservacion a pedido:", error)
+    res.status(400).json({ message: error.message || "Error al crear el pedido desde la reservacion" })
+  } finally {
+    connection.release()
   }
 }
 
@@ -210,5 +347,6 @@ module.exports = {
   createNewReservation,
   updateExistingReservation,
   updateReservationState,
-  deleteExistingReservation
+  deleteExistingReservation,
+  convertReservationToOrder
 }

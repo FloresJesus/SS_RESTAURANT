@@ -93,6 +93,24 @@ const menuOptions = computed(() =>
   }))
 )
 
+const todayReservationsForTable = computed(() => {
+  if (!orderForm.value.mesa_id) return []
+  const today = new Date().toISOString().split('T')[0]
+  return store.reservations.filter(r =>
+    r.mesa_id === Number(orderForm.value.mesa_id) &&
+    r.fecha_hora_inicio && r.fecha_hora_inicio.startsWith(today) &&
+    (r.estado === 'confirmada' || r.estado === 'pendiente')
+  )
+})
+
+const selectReservation = (reservationId) => {
+  orderForm.value.reserva_id = reservationId
+  const res = store.reservations.find(r => r.id === reservationId)
+  if (res && res.cliente_id) {
+    orderForm.value.cliente_id = res.cliente_id
+  }
+}
+
 const addItemRow = () => {
   orderForm.value.items.push({ producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' })
 }
@@ -143,14 +161,14 @@ const ordersByStatus = computed(() => ({
   delivered: store.orders.filter(o => o.status === 'delivered')
 }))
 
-const openAddModal = () => {
+const openAddModal = (reservationData = null) => {
   if (!canCreateOrder.value) return
   orderForm.value = {
-    mesa_id: null,
-    cliente_id: null,
-    reserva_id: null,
+    mesa_id: reservationData?.mesa_id || null,
+    cliente_id: reservationData?.cliente_id || null,
+    reserva_id: reservationData?.id || null,
     mesero_id: authStore.user?.id || null,
-    observaciones: '',
+    observaciones: reservationData?.observaciones || '',
     metodo_pago: '',
     items: [{ producto_id: null, cantidad: 1, precio_unitario: 0, observaciones: '' }]
   }
@@ -243,6 +261,7 @@ onMounted(async () => {
   await store.loadMenuItems()
   await store.loadTables()
   await store.loadCustomers()
+  await store.loadReservations()
 })
 </script>
 
@@ -497,6 +516,19 @@ onMounted(async () => {
                   </div>
                   <button v-if="!showNewCustomerForm" type="button" @click="showNewCustomerForm = true" class="btn btn-secondary btn-sm">+ Nuevo</button>
                 </div>
+              </div>
+            </div>
+
+            <div v-if="todayReservationsForTable.length > 0" class="form-group">
+              <label class="form-label">Reservacion Vinculada</label>
+              <div class="reservation-selector">
+                <select v-model="orderForm.reserva_id" @change="selectReservation(orderForm.reserva_id)" class="input">
+                  <option :value="null">Sin reservacion</option>
+                  <option v-for="res in todayReservationsForTable" :key="res.id" :value="res.id">
+                    {{ res.cliente_nombre || 'Cliente' }} - {{ (res.fecha_hora_inicio || '').split('T')[1] || res.fecha_hora_inicio }} ({{ res.cantidad_personas }} pers)
+                  </option>
+                </select>
+                <span class="reservation-hint">Se detectaron reservaciones para esta mesa</span>
               </div>
             </div>
 
@@ -1220,5 +1252,17 @@ onMounted(async () => {
 
 .input::placeholder {
   color: var(--outline);
+}
+
+.reservation-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.reservation-hint {
+  font-size: 0.75rem;
+  color: var(--success);
+  font-weight: 500;
 }
 </style>

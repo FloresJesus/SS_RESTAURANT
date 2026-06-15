@@ -59,8 +59,8 @@ export interface Reservation {
   cliente_id: number | null
   mesa_id: number
   cantidad_personas: number
-  fecha_reserva: string
-  hora_reserva: string
+  fecha_hora_inicio: string
+  fecha_hora_fin: string
   estado: 'pendiente' | 'confirmada' | 'cancelada' | 'completada' | 'no_asistio'
   observaciones: string | null
   creado_en: string
@@ -288,21 +288,43 @@ export const useRestaurantStore = defineStore('restaurant', () => {
   const loadReservations = async () => {
     try {
       const data = await apiFetch(`${API_BASE}/reservations`)
-      reservations.value = data.map((item: any) => ({
-        id: item.id,
-        cliente_id: item.cliente_id,
-        mesa_id: item.mesa_id,
-        cantidad_personas: item.cantidad_personas,
-        fecha_reserva: item.fecha_reserva,
-        hora_reserva: item.hora_reserva,
-        estado: item.estado,
-        observaciones: item.observaciones,
-        creado_en: item.creado_en,
-        cliente_nombre: item.cliente_nombre,
-        cliente_telefono: item.cliente_telefono,
-        cliente_email: item.cliente_email,
-        mesa_numero: item.mesa_numero
-      }))
+      reservations.value = data.map((item: any) => {
+        const toLocal = (dt: any) => {
+          if (!dt) return ''
+          if (dt instanceof Date) {
+            const pad = (n: number) => String(n).padStart(2, '0')
+            return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`
+          }
+          const str = String(dt)
+          const tIndex = str.indexOf('T')
+          if (tIndex !== -1) {
+            const datePart = str.substring(0, tIndex)
+            let timePart = str.substring(tIndex + 1)
+            if (timePart.length > 5) timePart = timePart.substring(0, 5)
+            return `${datePart}T${timePart}`
+          }
+          if (str.includes(' ')) {
+            return str.replace(' ', 'T').substring(0, 16)
+          }
+          return str
+        }
+
+        return {
+          id: item.id,
+          cliente_id: item.cliente_id,
+          mesa_id: item.mesa_id,
+          cantidad_personas: item.cantidad_personas,
+          fecha_hora_inicio: toLocal(item.fecha_hora_inicio),
+          fecha_hora_fin: toLocal(item.fecha_hora_fin),
+          estado: item.estado,
+          observaciones: item.observaciones,
+          creado_en: item.creado_en,
+          cliente_nombre: item.cliente_nombre,
+          cliente_telefono: item.cliente_telefono,
+          cliente_email: item.cliente_email,
+          mesa_numero: item.mesa_numero
+        }
+      })
     } catch (error) {
       console.error("Error cargando reservaciones:", error)
     }
@@ -336,10 +358,23 @@ export const useRestaurantStore = defineStore('restaurant', () => {
       body: JSON.stringify({ estado })
     })
     await loadReservations()
+    await loadTables()
   }
 
-  const getAvailableTablesForReservation = async (fecha: string, cantidad: number) => {
-    return apiFetch(`${API_BASE}/reservations/mesas-disponibles?fecha_reserva=${fecha}&cantidad_personas=${cantidad}`)
+  const getAvailableTablesForReservation = async (fecha_hora_inicio: string, fecha_hora_fin: string, cantidad: number) => {
+    return apiFetch(`${API_BASE}/reservations/mesas-disponibles?fecha_hora_inicio=${encodeURIComponent(fecha_hora_inicio)}&fecha_hora_fin=${encodeURIComponent(fecha_hora_fin)}&cantidad_personas=${cantidad}`)
+  }
+
+  const convertirReservaAPedido = async (reservaId: number, payload: any) => {
+    const response = await apiFetch(`${API_BASE}/reservations/${reservaId}/convertir-pedido`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    await loadOrders()
+    await loadTables()
+    await loadReservations()
+    return response
   }
 
   const loadCustomers = async () => {
@@ -453,6 +488,7 @@ export const useRestaurantStore = defineStore('restaurant', () => {
     generateTicket,
     generateInvoice,
     getAvailableTables,
-    getAvailableTablesForReservation
+    getAvailableTablesForReservation,
+    convertirReservaAPedido
   }
 })
