@@ -17,6 +17,7 @@ const allNavigation = [
   { name: 'Mesas', path: '/tables', icon: 'table_restaurant', roles: ['admin', 'cajero', 'mesero'] },
   { name: 'Reservaciones', path: '/reservations', icon: 'calendar_month', roles: ['admin', 'cajero', 'mesero'] },
   { name: 'Usuarios', path: '/employees', icon: 'groups', roles: ['admin'] },
+  { name: 'Reportes', path: '/reports', icon: 'bar_chart', roles: ['admin'] },
   { name: 'Auditoria', path: '/audit', icon: 'history', roles: ['admin'] }
 ]
 
