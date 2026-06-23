@@ -200,7 +200,7 @@ const handleLogout = () => {
       <!-- Logo -->
       <div class="sidebar-header">
         <div class="logo-icon">
-          <span class="material-symbols-outlined">restaurant</span>
+          <img src="/logo.png" alt="San Salvador" class="sidebar-logo-img" />
         </div>
         <span v-if="sidebarOpen" class="logo-text">SAN SALVADOR</span>
       </div>
@@ -405,9 +405,10 @@ const handleLogout = () => {
   flex-shrink: 0;
 }
 
-.logo-icon .material-symbols-outlined {
-  color: white;
-  font-size: 1.5rem;
+.sidebar-logo-img {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
 }
 
 .logo-text {

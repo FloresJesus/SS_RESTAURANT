@@ -80,8 +80,7 @@ const handleSubmit = async () => {
       <div class="login-card animate-fade-in">
         <!-- Branding -->
         <header class="branding">
-          <p class="brand-subtitle">Restaurante</p>
-          <h1 class="brand-title">SAN SALVADOR</h1>
+          <img src="/logo.png" alt="San Salvador Logo" class="logo" />
         </header>
 
         <div v-if="error" class="error-message">

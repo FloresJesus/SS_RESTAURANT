@@ -983,3 +983,8 @@ textarea.input {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+.logo{
+  width: 150px;
+  height: auto;
+}
