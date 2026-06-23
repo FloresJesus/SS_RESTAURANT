@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useReportsStore } from '@/stores/reports'
+import { useReportsStore } from '../stores/reports'
 
 const reportsStore = useReportsStore()
 

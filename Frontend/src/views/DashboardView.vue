@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRestaurantStore } from '@/stores/restaurant'
-import { useAuthStore } from '@/stores/auth'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRestaurantStore } from '../stores/restaurant'
+import { useAuthStore } from '../stores/auth'
 import { Line, Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -59,8 +59,8 @@ const stats = computed(() => {
   const weeklyData = store.salesData.weekly
   const todayIndex = weeklyData.findIndex(d => d.day === getTodayLabel())
   const yesterdayIndex = todayIndex > 0 ? todayIndex - 1 : -1
-  const todaySalesNum = todayIndex >= 0 ? weeklyData[todayIndex].sales : 0
-  const yesterdaySalesNum = yesterdayIndex >= 0 ? weeklyData[yesterdayIndex].sales : 0
+  const todaySalesNum = todayIndex >= 0 ? weeklyData[todayIndex]?.sales ?? 0 : 0
+  const yesterdaySalesNum = yesterdayIndex >= 0 ? weeklyData[yesterdayIndex]?.sales ?? 0 : 0
   const prevWeekAvg = weeklyData.length >= 7
     ? weeklyData.reduce((s, d) => s + d.sales, 0) / 7
     : 0
@@ -99,21 +99,38 @@ const formatCurrency = (value: number) => {
   return `Bs ${Number(value).toFixed(2)}`
 }
 
-const lineChartData = computed(() => ({
-  labels: store.salesData.weekly.map(d => d.day),
-  datasets: [{
-    label: 'Ventas',
-    data: store.salesData.weekly.map(d => d.sales),
-    borderColor: '#00342b',
-    backgroundColor: 'rgba(0, 52, 43, 0.1)',
-    fill: true,
-    tension: 0.4,
-    pointBackgroundColor: '#00342b',
-    pointBorderColor: '#00342b',
-    pointHoverBackgroundColor: '#fff',
-    pointHoverBorderColor: '#00342b',
-  }]
-}))
+const chartTitle = computed(() =>
+  filterRange.value === 'month' ? 'Ventas del Mes Actual' : 'Ventas de los Ultimos 7 Dias'
+)
+
+const chartSubtitle = computed(() =>
+  filterRange.value === 'month' ? 'Ingresos diarios del mes' : 'Ingresos diarios'
+)
+
+const lineChartData = computed(() => {
+  const data = store.salesData.weekly
+  const labels = filterRange.value === 'month'
+    ? data.map(d => {
+        const num = parseInt(d.day, 10)
+        return isNaN(num) ? d.day : num
+      })
+    : data.map(d => d.day)
+  return {
+    labels,
+    datasets: [{
+      label: 'Ventas',
+      data: data.map(d => d.sales),
+      borderColor: '#00342b',
+      backgroundColor: 'rgba(0, 52, 43, 0.1)',
+      fill: true,
+      tension: 0.4,
+      pointBackgroundColor: '#00342b',
+      pointBorderColor: '#00342b',
+      pointHoverBackgroundColor: '#fff',
+      pointHoverBorderColor: '#00342b',
+    }]
+  }
+})
 
 const lineChartOptions = {
   responsive: true,
@@ -179,7 +196,7 @@ const doughnutChartOptions = {
   cutout: '70%',
   plugins: {
     legend: {
-      position: 'bottom',
+      position: 'bottom' as const,
       labels: {
         color: '#707975',
         padding: 16,
@@ -208,11 +225,15 @@ const statusLabels: Record<string, string> = {
   delivered: 'Entregado'
 }
 
+watch(filterRange, (newRange) => {
+  store.loadSalesStats(newRange)
+})
+
 onMounted(async () => {
   await Promise.all([
     store.loadOrders(),
     store.loadTables(),
-    store.loadSalesStats()
+    store.loadSalesStats(filterRange.value)
   ])
 })
 </script>
@@ -298,8 +319,8 @@ onMounted(async () => {
       <div class="card chart-card chart-card-wide">
         <div class="card-header">
           <div>
-            <h3 class="card-title">Ventas de los Ultimos 7 Dias</h3>
-            <p class="card-subtitle">Ingresos diarios</p>
+            <h3 class="card-title">{{ chartTitle }}</h3>
+            <p class="card-subtitle">{{ chartSubtitle }}</p>
           </div>
           <select v-model="filterRange" class="filter-select">
             <option value="week">Ultimos 7 dias</option>

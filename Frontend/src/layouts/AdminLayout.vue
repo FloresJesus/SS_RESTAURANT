@@ -1,13 +1,140 @@
-<script setup>
-import { ref, computed } from 'vue'
+<script setup lang="ts">
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '../stores/auth'
+import { useRestaurantStore } from '../stores/restaurant'
+import { useNotificationStore } from '../stores/notification'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const restaurantStore = useRestaurantStore()
+const notifStore = useNotificationStore()
 const sidebarOpen = ref(true)
 const mobileMenuOpen = ref(false)
+
+// --- Search ---
+const searchQuery = ref('')
+const searchOpen = ref(false)
+const searchResults = ref<{ label: string; items: { name: string; path: string; subtitle: string }[] }[]>([])
+
+watch(searchQuery, (q) => {
+  const trimmed = q.trim().toLowerCase()
+  if (!trimmed) {
+    searchResults.value = []
+    searchOpen.value = false
+    return
+  }
+
+  const results: { label: string; items: { name: string; path: string; subtitle: string }[] }[] = []
+
+  const orders = restaurantStore.orders.filter(o =>
+    String(o.id).includes(trimmed) ||
+    String(o.mesa_numero).includes(trimmed) ||
+    (o.cliente_nombre && o.cliente_nombre.toLowerCase().includes(trimmed))
+  ).slice(0, 5)
+  if (orders.length) {
+    results.push({
+      label: 'Pedidos',
+      items: orders.map(o => ({
+        name: `#${o.id} - Mesa ${o.mesa_numero}`,
+        path: `/orders`,
+        subtitle: o.cliente_nombre || `Total: Bs ${o.total}`
+      }))
+    })
+  }
+
+  const menuItems = restaurantStore.menuItems.filter(m =>
+    m.nombre.toLowerCase().includes(trimmed) ||
+    (m.categoria_nombre && m.categoria_nombre.toLowerCase().includes(trimmed))
+  ).slice(0, 5)
+  if (menuItems.length) {
+    results.push({
+      label: 'Menu',
+      items: menuItems.map(m => ({
+        name: m.nombre,
+        path: `/menu`,
+        subtitle: `Bs ${m.precio} - ${m.categoria_nombre || 'Sin categoria'}`
+      }))
+    })
+  }
+
+  const customers = restaurantStore.customers.filter(c =>
+    c.nombre.toLowerCase().includes(trimmed) ||
+    c.telefono.includes(trimmed)
+  ).slice(0, 5)
+  if (customers.length) {
+    results.push({
+      label: 'Clientes',
+      items: customers.map(c => ({
+        name: c.nombre,
+        path: `/customers`,
+        subtitle: c.telefono
+      }))
+    })
+  }
+
+  const tables = restaurantStore.tables.filter(t =>
+    String(t.numero).includes(trimmed)
+  ).slice(0, 5)
+  if (tables.length) {
+    results.push({
+      label: 'Mesas',
+      items: tables.map(t => ({
+        name: `Mesa ${t.numero}`,
+        path: `/tables`,
+        subtitle: `Capacidad: ${t.capacidad} - ${t.estado}`
+      }))
+    })
+  }
+
+  searchResults.value = results
+  searchOpen.value = results.length > 0
+})
+
+const navigateTo = (path: string) => {
+  searchQuery.value = ''
+  searchOpen.value = false
+  router.push(path)
+}
+
+// --- Notifications ---
+const notifOpen = ref(false)
+
+const timeAgo = (dateStr: string) => {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'Ahora'
+  if (mins < 60) return `hace ${mins} min`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `hace ${hours}h`
+  const days = Math.floor(hours / 24)
+  return `hace ${days}d`
+}
+
+const notifIcon = (tipo: string) => {
+  if (tipo.includes('pending')) return 'receipt_long'
+  if (tipo.includes('preparing')) return 'cooking'
+  if (tipo.includes('ready')) return 'check_circle'
+  if (tipo.includes('delivered')) return 'local_shipping'
+  return 'notifications'
+}
+
+onMounted(() => {
+  notifStore.startPolling()
+  restaurantStore.loadMenuItems()
+  restaurantStore.loadCustomers()
+})
+
+onUnmounted(() => {
+  notifStore.stopPolling()
+})
+
+// Close dropdowns on outside click
+const closeDropdowns = () => {
+  notifOpen.value = false
+  searchOpen.value = false
+}
 
 const allNavigation = [
   { name: 'Dashboard', path: '/', icon: 'dashboard', roles: ['admin', 'cajero', 'mesero', 'cocina'] },
@@ -22,30 +149,33 @@ const allNavigation = [
 ]
 
 const navigation = computed(() => {
-  const userRole = authStore.user?.rol
+  const userRole = (authStore as any).user?.rol
   if (!userRole) return []
-  return allNavigation.filter(item => item.roles.includes(userRole))
+  return allNavigation.filter((item: any) => item.roles.includes(userRole))
 })
 
-const isActive = (path) => {
+const isActive = (path: string) => {
   if (path === '/') return route.path === '/'
   return route.path.startsWith(path)
 }
 
 const initials = computed(() => {
-  if (!authStore.user || !authStore.user.nombre || !authStore.user.apellido) return '?'
-  return (authStore.user.nombre[0] + authStore.user.apellido[0]).toUpperCase()
+  const u = (authStore as any).user
+  if (!u || !u.nombre || !u.apellido) return '?'
+  return (u.nombre[0] + u.apellido[0]).toUpperCase()
 })
 
 const displayName = computed(() => {
-  if (!authStore.user || !authStore.user.nombre || !authStore.user.apellido) return 'Usuario'
-  return `${authStore.user.nombre} ${authStore.user.apellido}`
+  const u = (authStore as any).user
+  if (!u || !u.nombre || !u.apellido) return 'Usuario'
+  return `${u.nombre} ${u.apellido}`
 })
 
-const roleLabels = { admin: 'Administrador', cajero: 'Cajero', mesero: 'Mesero', cocina: 'Cocina' }
+const roleLabels: Record<string, string> = { admin: 'Administrador', cajero: 'Cajero', mesero: 'Mesero', cocina: 'Cocina' }
 
 const displayRole = computed(() => {
-  return roleLabels[authStore.user?.rol] || 'Sin rol'
+  const rol = (authStore as any).user?.rol
+  return rol ? roleLabels[rol] : 'Sin rol'
 })
 
 const handleLogout = () => {
@@ -57,7 +187,7 @@ const handleLogout = () => {
 </script>
 
 <template>
-  <div class="admin-layout">
+  <div class="admin-layout" @click="closeDropdowns">
     <!-- Mobile Menu Overlay -->
     <div 
       v-if="mobileMenuOpen" 
@@ -129,18 +259,61 @@ const handleLogout = () => {
           </button>
           
           <!-- Search -->
-          <div class="search-wrapper">
+          <div class="search-wrapper" @click.stop>
             <span class="material-symbols-outlined search-icon">search</span>
-            <input type="text" placeholder="Buscar..." class="search-input" />
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Buscar pedidos, menu, clientes..."
+              class="search-input"
+              @focus="searchQuery ? searchOpen = true : null"
+            />
+            <div v-if="searchOpen" class="search-dropdown">
+              <div v-for="group in searchResults" :key="group.label" class="search-group">
+                <p class="search-group-title">{{ group.label }}</p>
+                <button
+                  v-for="item in group.items"
+                  :key="item.name"
+                  class="search-result-item"
+                  @click="navigateTo(item.path)"
+                >
+                  <div class="search-result-info">
+                    <p class="search-result-name">{{ item.name }}</p>
+                    <p class="search-result-subtitle">{{ item.subtitle }}</p>
+                  </div>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         
         <div class="topbar-right">
           <!-- Notifications -->
-          <button class="topbar-btn notification-btn">
-            <span class="material-symbols-outlined">notifications</span>
-            <span class="notification-dot"></span>
-          </button>
+          <div class="notif-wrapper" @click.stop>
+            <button @click="notifOpen = !notifOpen" class="topbar-btn notification-btn">
+              <span class="material-symbols-outlined">notifications</span>
+              <span v-if="notifStore.unreadCount > 0" class="notification-badge">{{ notifStore.unreadCount }}</span>
+            </button>
+            <div v-if="notifOpen" class="notif-dropdown">
+              <div class="notif-header">
+                <h3 class="notif-title">Notificaciones</h3>
+                <button v-if="notifStore.unreadCount > 0" @click="notifStore.markAllAsRead()" class="notif-mark-read">
+                  Marcar todas leidas
+                </button>
+              </div>
+              <div class="notif-list">
+                <div v-for="n in notifStore.notifications" :key="n.id" :class="['notif-item', { 'notif-unread': !n.leida }]" @click="notifStore.markAsRead(n.id)">
+                  <span class="material-symbols-outlined notif-item-icon">{{ notifIcon(n.tipo) }}</span>
+                  <div class="notif-item-content">
+                    <p class="notif-item-title">{{ n.titulo }}</p>
+                    <p class="notif-item-message">{{ n.mensaje }}</p>
+                    <p class="notif-item-time">{{ timeAgo(n.creado_en) }}</p>
+                  </div>
+                </div>
+                <p v-if="notifStore.notifications.length === 0" class="notif-empty">No hay notificaciones</p>
+              </div>
+            </div>
+          </div>
           
           <!-- Settings -->
           <RouterLink to="/settings" class="topbar-btn">
@@ -539,5 +712,193 @@ const handleLogout = () => {
   .main-content {
     padding: 1.5rem;
   }
+}
+
+/* Search Dropdown */
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  right: 0;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 24rem;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.search-group {
+  padding: 0.5rem;
+}
+
+.search-group + .search-group {
+  border-top: 1px solid var(--outline-variant);
+}
+
+.search-group-title {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--on-surface-variant);
+  padding: 0.25rem 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.search-result-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: background var(--transition-base);
+  text-align: left;
+}
+
+.search-result-item:hover {
+  background: var(--surface-container);
+}
+
+.search-result-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--on-surface);
+}
+
+.search-result-subtitle {
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+}
+
+/* Notifications */
+.notif-wrapper {
+  position: relative;
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: 22rem;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  max-height: 28rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.notif-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.notif-mark-read {
+  font-size: 0.75rem;
+  color: var(--primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius);
+  transition: background var(--transition-base);
+}
+
+.notif-mark-read:hover {
+  background: rgba(0, 52, 43, 0.08);
+}
+
+.notif-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.notif-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background var(--transition-base);
+  border-left: 3px solid transparent;
+}
+
+.notif-item:hover {
+  background: var(--surface-container);
+}
+
+.notif-unread {
+  background: rgba(0, 52, 43, 0.04);
+  border-left-color: var(--primary);
+}
+
+.notif-item-icon {
+  font-size: 1.25rem;
+  color: var(--primary);
+  margin-top: 0.125rem;
+  flex-shrink: 0;
+}
+
+.notif-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-item-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--on-surface);
+  margin-bottom: 0.125rem;
+}
+
+.notif-item-message {
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+  margin-bottom: 0.25rem;
+}
+
+.notif-item-time {
+  font-size: 0.6875rem;
+  color: var(--outline);
+}
+
+.notif-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--on-surface-variant);
+  font-size: 0.875rem;
+}
+
+.notification-badge {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.125rem;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  background: var(--primary);
+  color: white;
+  font-size: 0.625rem;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.25rem;
 }
 </style>

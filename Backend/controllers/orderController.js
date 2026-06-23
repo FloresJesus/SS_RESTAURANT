@@ -17,10 +17,12 @@ const {
   getOrderTotal,
   getDailySales,
   getWeeklySales,
+  getMonthlySales,
   getTopSellingProducts,
   getSalesByCategory
 } = require("../models/orderModels")
 const { updateTableStatus, findTableById } = require("../models/tableModels")
+const { createNotification } = require("../models/notificationModel")
 
 const mapServiceStatus = (estado_servicio) => {
   const map = {
@@ -350,6 +352,24 @@ const updateOrderStatus = async (req, res) => {
     }
 
     await connection.commit()
+
+    const titulos = { pending: 'Nuevo Pedido', preparing: 'Pedido en Preparacion', ready: 'Pedido Listo', delivered: 'Pedido Entregado' }
+    const mensajes = { pending: `Pedido #${id} registrado`, preparing: `Pedido #${id} esta siendo preparado`, ready: `Pedido #${id} esta listo para entregar`, delivered: `Pedido #${id} ha sido entregado` }
+    const destinos = { pending: 'cocina', preparing: 'cocina', ready: 'mesero', delivered: 'admin' }
+
+    try {
+      await createNotification({
+        tipo: `order_${status}`,
+        titulo: titulos[status] || 'Pedido Actualizado',
+        mensaje: mensajes[status] || `Pedido #${id} cambio a ${status}`,
+        referencia_id: Number(id),
+        referencia_tipo: 'order',
+        usuario_destino: destinos[status] || null
+      })
+    } catch (notifErr) {
+      console.error("Error creando notificacion:", notifErr)
+    }
+
     await logAudit(req.user.id, 'ACTUALIZAR', 'pedidos', Number(id), `Estado pedido ${id} cambiado a ${status}`, req.ip)
     res.json({ message: "Estado del pedido actualizado" })
   } catch (error) {
@@ -361,31 +381,85 @@ const updateOrderStatus = async (req, res) => {
   }
 }
 
+function toLocalDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function formatLocalDate(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
 const getSalesStats = async (req, res) => {
   try {
-    const weeklyRows = await getWeeklySales()
+    const { range } = req.query
     const topProducts = await getTopSellingProducts(5)
     const todayData = await getDailySales()
     const categoryData = await getSalesByCategory()
 
-    const dayNames = { Monday: 'Lun', Tuesday: 'Mar', Wednesday: 'Mié', Thursday: 'Jue', Friday: 'Vie', Saturday: 'Sáb', Sunday: 'Dom' }
+    let weekly = []
 
-    const weekly = weeklyRows.map(r => ({
-      day: dayNames[r.dia_nombre] || r.dia_nombre,
-      sales: parseFloat(r.total_ventas),
-      date: r.fecha
-    }))
+    if (range === 'month') {
+      const monthlyRows = await getMonthlySales()
 
-    for (let i = 0; i < 7; i++) {
-      const d = new Date()
-      d.setDate(d.getDate() - (6 - i))
-      const dateStr = d.toISOString().split('T')[0]
-      if (!weekly.find(w => w.date === dateStr)) {
-        weekly.push({
-          day: dayNames[d.toLocaleDateString('en-US', { weekday: 'long' })] || '???',
-          sales: 0,
-          date: dateStr
-        })
+      weekly = monthlyRows.map(r => {
+        const d = toLocalDate(r.fecha)
+        return {
+          day: String(d.getDate()),
+          sales: parseFloat(r.total_ventas),
+          date: r.fecha
+        }
+      })
+
+      const latestDate = weekly.length > 0
+        ? weekly.reduce((a, b) => a.date > b.date ? a : b).date
+        : formatLocalDate(new Date())
+
+      const ref = toLocalDate(latestDate)
+      const year = ref.getFullYear()
+      const month = ref.getMonth()
+      const daysInMonth = new Date(year, month + 1, 0).getDate()
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        if (!weekly.find(w => w.date === dateStr)) {
+          weekly.push({
+            day: String(day),
+            sales: 0,
+            date: dateStr
+          })
+        }
+      }
+    } else {
+      const weeklyRows = await getWeeklySales()
+
+      weekly = weeklyRows.map(r => ({
+        day: daysOfWeek[toLocalDate(r.fecha).getDay()],
+        sales: parseFloat(r.total_ventas),
+        date: r.fecha
+      }))
+
+      const latestDate = weekly.length > 0
+        ? weekly.reduce((a, b) => a.date > b.date ? a : b).date
+        : formatLocalDate(new Date())
+
+      const refDate = toLocalDate(latestDate)
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(refDate)
+        d.setDate(d.getDate() - i)
+        const dateStr = formatLocalDate(d)
+        if (!weekly.find(w => w.date === dateStr)) {
+          weekly.push({
+            day: daysOfWeek[d.getDay()],
+            sales: 0,
+            date: dateStr
+          })
+        }
       }
     }
 

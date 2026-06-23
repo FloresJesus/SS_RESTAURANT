@@ -108,9 +108,9 @@ export const useRestaurantStore = defineStore('restaurant', () => {
     categories: []
   })
 
-  const loadSalesStats = async () => {
+  const loadSalesStats = async (range = 'week') => {
     try {
-      const data = await apiFetch(`${API_BASE}/orders/stats`)
+      const data = await apiFetch(`${API_BASE}/orders/stats?range=${range}`)
       salesData.value = data
     } catch (error) {
       console.error("Error cargando estadisticas de ventas:", error)

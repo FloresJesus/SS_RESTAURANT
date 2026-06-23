@@ -257,6 +257,22 @@ const getTopSellingProducts = async (limit = 10) => {
   return rows
 }
 
+const getMonthlySales = async () => {
+  const [rows] = await db.query(
+    `SELECT 
+       DATE(p.creado_en) AS fecha,
+       COALESCE(SUM(dp.subtotal), 0) AS total_ventas,
+       COUNT(DISTINCT p.id) AS cantidad_pedidos
+     FROM pedido p
+     LEFT JOIN detalle_pedido dp ON p.id = dp.pedido_id
+     WHERE p.creado_en >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+     AND p.estado_pago IN ('pagado', 'pendiente')
+     GROUP BY DATE(p.creado_en)
+     ORDER BY DATE(p.creado_en) ASC`
+  )
+  return rows
+}
+
 const getSalesByCategory = async () => {
   const [rows] = await db.query(
     `SELECT 
@@ -293,5 +309,6 @@ module.exports = {
   getDailySales,
   getWeeklySales,
   getTopSellingProducts,
-  getSalesByCategory
+  getSalesByCategory,
+  getMonthlySales
 }

@@ -17,6 +17,7 @@ const invoiceRoutes = require("./routes/invoiceRoutes")
 const settingsRoutes = require("./routes/settingsRoutes")
 const reportRoutes = require("./routes/reportRoutes")
 const auditRoutes = require("./routes/auditRoutes")
+const notificationRoutes = require("./routes/notificationRoutes")
 
 const { verifyToken } = require("./middleware/authMiddleware")
 const { checkRole } = require("./middleware/roleMiddleware")
@@ -47,6 +48,7 @@ app.use("/api/invoices", verifyToken, checkRole(["admin", "cajero"]), invoiceRou
 app.use("/api/settings", verifyToken, checkRole(["admin"]), settingsRoutes)
 app.use("/api/reports", verifyToken, checkRole(["admin"]), reportRoutes)
 app.use("/api/audit", verifyToken, checkRole(["admin"]), auditRoutes)
+app.use("/api/notifications", verifyToken, notificationRoutes)
 
 const PORT = process.env.PORT || 3000
 
