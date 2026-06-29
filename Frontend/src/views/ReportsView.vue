@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useReportsStore } from '../stores/reports'
-import { API_BASE } from '@/utils/api'
+import { API_BASE } from '../utils/api'
 
 const reportsStore = useReportsStore()
 
