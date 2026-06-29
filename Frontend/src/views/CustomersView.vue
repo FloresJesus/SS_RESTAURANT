@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useCustomersStore } from '@/stores/customers'
-import { apiFetch } from '@/utils/api'
+import { apiFetch, API_BASE } from '@/utils/api'
 import { required, noNumbers, onlyLetters, isPhone, isEmail, minLength, composeValidators } from '@/utils/validators'
 import { useFormValidation } from '@/composables/useFormValidation'
 import FormField from '@/components/FormField.vue'
@@ -98,13 +98,13 @@ const saveCustomer = async () => {
 
   try {
     if (editingCustomer.value) {
-      await apiFetch(`/api/customers/${editingCustomer.value.id}`, {
+      await apiFetch(`${API_BASE}/customers/${editingCustomer.value.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
     } else {
-      await apiFetch('/api/customers', {
+      await apiFetch(`${API_BASE}/customers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -123,7 +123,7 @@ const deleteCustomer = async (customer) => {
   if (!confirm(`¿Estás seguro de eliminar a ${customer.nombre}?`)) return
 
   try {
-    await apiFetch(`/api/customers/${customer.id}`, {
+    await apiFetch(`${API_BASE}/customers/${customer.id}`, {
       method: 'DELETE'
     })
 

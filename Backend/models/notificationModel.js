@@ -1,23 +1,5 @@
 const db = require("../config/db")
 
-const initTable = async () => {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS notificaciones (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      tipo VARCHAR(50) NOT NULL,
-      titulo VARCHAR(255) NOT NULL,
-      mensaje TEXT,
-      referencia_id INT NULL,
-      referencia_tipo VARCHAR(50) NULL,
-      usuario_destino VARCHAR(50) NULL,
-      leida TINYINT(1) DEFAULT 0,
-      creado_en DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
-}
-
-initTable()
-
 const getNotifications = async (usuarioRol, limit = 20) => {
   let query = `
     SELECT id, tipo, titulo, mensaje, referencia_id, referencia_tipo,

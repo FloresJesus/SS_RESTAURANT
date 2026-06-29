@@ -1,4 +1,5 @@
 import { defineStore } from "pinia"
+import { API_BASE } from "@/utils/api"
 
 interface User {
   id: number
@@ -72,7 +73,7 @@ export const useAuthStore = defineStore("auth", {
 
     async login(email: string, password: string): Promise<LoginResult> {
       try {
-        const response = await fetch("/api/auth/login", {
+        const response = await fetch(`${API_BASE}/auth/login`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json"

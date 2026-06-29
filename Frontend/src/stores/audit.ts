@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { apiFetch } from '@/utils/api'
+import { apiFetch, API_BASE } from '@/utils/api'
 
 export interface AuditEntry {
   id: number
@@ -46,7 +46,7 @@ export const useAuditStore = defineStore('audit', {
       this.error = ''
 
       try {
-        let url = '/api/audit'
+        let url = `${API_BASE}/audit`
         if (filters) {
           const params = new URLSearchParams()
           if (filters.accion) params.append('accion', filters.accion)

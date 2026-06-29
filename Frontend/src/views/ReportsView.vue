@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useReportsStore } from '../stores/reports'
+import { API_BASE } from '@/utils/api'
 
 const reportsStore = useReportsStore()
 
@@ -117,7 +118,7 @@ const handleGenerate = async () => {
 
 const handleDownload = (id: number) => {
   const token = localStorage.getItem('token')
-  const url = `/api/reports/download/${id}`
+  const url = `${API_BASE}/reports/download/${id}`
   const xhr = new XMLHttpRequest()
   xhr.open('GET', url, true)
   xhr.setRequestHeader('Authorization', `Bearer ${token}`)
@@ -125,9 +126,11 @@ const handleDownload = (id: number) => {
   xhr.onload = () => {
     if (xhr.status === 200) {
       const blob = xhr.response
+      const header = xhr.getResponseHeader('X-Filename')
+      const name = header ? decodeURIComponent(header) : `reporte_${id}.pdf`
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
-      link.download = `reporte_${id}.pdf`
+      link.download = name
       link.click()
       URL.revokeObjectURL(link.href)
     }

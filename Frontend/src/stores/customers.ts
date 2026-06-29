@@ -1,5 +1,5 @@
 import { defineStore } from "pinia"
-import { apiFetch } from "@/utils/api"
+import { apiFetch, API_BASE } from "@/utils/api"
 
 interface Customer {
   id: number
@@ -17,7 +17,7 @@ export const useCustomersStore = defineStore("customers", {
   actions: {
     async fetchCustomers() {
       try {
-        const data = await apiFetch("http://localhost:3000/api/customers")
+        const data = await apiFetch(`${API_BASE}/customers`)
         this.customers = data
       } catch (error) {
         console.error("Error fetching customers:", error)

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRestaurantStore } from '@/stores/restaurant'
 import { useAuthStore } from '@/stores/auth'
-import { apiFetch } from '@/utils/api'
+import { apiFetch, API_BASE } from '@/utils/api'
 import { required, isNumeric, min } from '@/utils/validators'
 import { useFormValidation } from '@/composables/useFormValidation'
 import FormField from '@/components/FormField.vue'
@@ -81,7 +81,7 @@ const saveTable = async () => {
 const deleteTable = async (id) => {
   if (!confirm('¿Estás seguro de eliminar esta mesa?')) return
   try {
-    await apiFetch(`/api/tables/${id}`, { method: 'DELETE' })
+    await apiFetch(`${API_BASE}/tables/${id}`, { method: 'DELETE' })
     await store.loadTables()
   } catch (error) {
     alert(error.message || 'Error al eliminar mesa')

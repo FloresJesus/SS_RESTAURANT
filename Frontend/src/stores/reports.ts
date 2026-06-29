@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { apiFetch } from '@/utils/api'
+import { apiFetch, API_BASE } from '@/utils/api'
 
 export interface ReportEntry {
   id: number
@@ -34,7 +34,7 @@ export const useReportsStore = defineStore('reports', {
       this.loading = true
       this.error = ''
       try {
-        let url = '/api/reports'
+        let url = `${API_BASE}/reports`
         if (tipo) url += `?tipo=${tipo}`
         const data = await apiFetch(url)
         this.reports = data as ReportEntry[]
@@ -48,7 +48,7 @@ export const useReportsStore = defineStore('reports', {
 
     async fetchTipos() {
       try {
-        const data = await apiFetch('/api/reports/tipos')
+        const data = await apiFetch(`${API_BASE}/reports/tipos`)
         this.tipos = data as ReportTipo[]
       } catch {
         this.tipos = []
@@ -59,7 +59,7 @@ export const useReportsStore = defineStore('reports', {
       this.generating = true
       this.error = ''
       try {
-        const data = await apiFetch(`/api/reports/generate/${tipo}`, {
+        const data = await apiFetch(`${API_BASE}/reports/generate/${tipo}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(params)
@@ -74,7 +74,7 @@ export const useReportsStore = defineStore('reports', {
     },
 
     async deleteReport(id: number) {
-      await apiFetch(`/api/reports/${id}`, { method: 'DELETE' })
+      await apiFetch(`${API_BASE}/reports/${id}`, { method: 'DELETE' })
       this.reports = this.reports.filter(r => r.id !== id)
     }
   }

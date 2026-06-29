@@ -6,6 +6,10 @@ const configDb = require("../config/db")
 const { logAudit } = require("../utils/auditLogger")
 const reportModels = require("../models/reportModels")
 
+const LOGO_PATH = path.join(__dirname, "..", "assets", "logo.png")
+const GREEN = "#00342b"
+const GREEN_LIGHT = "#e8f5f1"
+
 const REPORTES_DIR = path.join(__dirname, "..", "reports")
 if (!fs.existsSync(REPORTES_DIR)) {
   fs.mkdirSync(REPORTES_DIR, { recursive: true })
@@ -41,36 +45,132 @@ const getConfig = async () => {
 
 const generateHeader = (doc, config, titulo, fecha_inicio, fecha_fin) => {
   const pageWidth = doc.page.width
-  const leftMargin = doc.page.margins.left
+  const margin = doc.page.margins.left
 
-  doc.fontSize(18).font("Helvetica-Bold").text(config.nombre_restaurante, leftMargin, 20, { align: "center" })
-  doc.fontSize(9).font("Helvetica").text(
-    [config.direccion, config.telefono].filter(Boolean).join(" | "),
-    { align: "center" }
+  const headerHeight = 90
+
+  // Fondo verde
+  doc.rect(0, 0, pageWidth, headerHeight)
+    .fill("#0F6E56")
+
+  // Logo
+  if (fs.existsSync(LOGO_PATH)) {
+    try {
+      doc.image(LOGO_PATH, margin, 18, {
+        height: 55
+      })
+    } catch (err) { }
+  }
+
+  // Datos restaurante
+  const leftX = margin + 90
+
+  doc.fillColor("white")
+    .font("Helvetica-Bold")
+    .fontSize(18)
+    .text(config.nombre_restaurante, leftX, 20)
+
+  doc.font("Helvetica")
+    .fontSize(8)
+    .fillColor("#9FE1CB")
+    .text(`NIT: ${config.nit || "N/A"}`, leftX, 42)
+
+  doc.text(
+    config.direccion || "Oruro, Bolivia",
+    leftX,
+    54
   )
-  doc.fontSize(8).text(`NIT: ${config.nit || "N/A"}`, { align: "center" })
 
-  doc.moveDown(0.5)
-  doc.moveTo(leftMargin, doc.y).lineTo(pageWidth - leftMargin, doc.y).strokeColor("#cccccc").stroke()
-  doc.moveDown(0.5)
+  // Columna derecha
+  const rightWidth = 180
+  const rightX = pageWidth - rightWidth - margin
 
-  doc.fontSize(14).font("Helvetica-Bold").text(titulo, { align: "center" })
-  doc.fontSize(9).font("Helvetica").text(
-    `Periodo: ${new Date(fecha_inicio).toLocaleDateString("es-BO")} - ${new Date(fecha_fin).toLocaleDateString("es-BO")}`,
-    { align: "center" }
-  )
-  doc.fontSize(8).text(`Generado: ${new Date().toLocaleString("es-BO")}`, { align: "center" })
-  doc.moveDown(1)
+  // Badge
+  const badgeFontSize = titulo.length > 18 ? 6 : 7
+  doc.fontSize(badgeFontSize).font("Helvetica-Bold")
+  const textW = doc.widthOfString(titulo.toUpperCase())
+  const badgeW = Math.max(textW + 20, 80)
+  const badgeX = rightX + rightWidth - badgeW
+
+  doc.roundedRect(badgeX, 15, badgeW, 18, 10)
+    .fillOpacity(0.2)
+    .fillAndStroke("white", "white")
+
+  doc.fillOpacity(1)
+    .fillColor("white")
+    .fontSize(badgeFontSize)
+    .font("Helvetica-Bold")
+    .text(
+      titulo.toUpperCase(),
+      badgeX,
+      20,
+      {
+        width: badgeW,
+        align: "center"
+      }
+    )
+
+  doc.fillColor("#9FE1CB")
+    .fontSize(8)
+    .font("Helvetica")
+    .text(
+      "RESUMEN DEL PERÍODO",
+      rightX,
+      42,
+      {
+        width: rightWidth,
+        align: "right"
+      }
+    )
+
+  doc.fillColor("white")
+    .font("Helvetica-Bold")
+    .fontSize(14)
+    .text(
+      fecha_inicio === fecha_fin
+        ? new Date(fecha_inicio).toLocaleDateString("es-BO")
+        : `${new Date(fecha_inicio).toLocaleDateString("es-BO")} — ${new Date(fecha_fin).toLocaleDateString("es-BO")}`,
+      rightX,
+      54,
+      {
+        width: rightWidth,
+        align: "right"
+      }
+    )
+
+  doc.fillColor("#9FE1CB")
+    .fontSize(7)
+    .font("Helvetica")
+    .text(
+      `Generado: ${new Date().toLocaleString("es-BO")}`,
+      rightX,
+      72,
+      {
+        width: rightWidth,
+        align: "right"
+      }
+    )
+
+  // Reiniciar posición para el contenido
+  doc.y = headerHeight + 15
+  doc.fillColor("black")
 }
 
-const generateFooter = (doc) => {
-  const bottomY = doc.page.height - 40
-  doc.fontSize(7).font("Helvetica").text(
+const generateFooter = (doc, config = {}) => {
+  const bottomY = doc.page.height - 36
+  const pw = doc.page.width
+  const lm = doc.page.margins.left
+
+  doc.moveTo(lm, bottomY - 6).lineTo(pw - lm, bottomY - 6).strokeColor("#ddd").stroke()
+  doc.fontSize(7).font("Helvetica").fillColor("#999")
+    .text(config.nombre_restaurante || "SAN SALVADOR", lm, bottomY + 2)
+  doc.text(
     `Página ${doc.bufferedPageRange().start + 1}`,
     0,
-    bottomY,
-    { align: "center", width: doc.page.width }
+    bottomY + 2,
+    { align: "right", width: pw - lm }
   )
+  doc.fillColor("#000")
 }
 
 const drawTable = (doc, headers, rows, options = {}) => {
@@ -114,15 +214,15 @@ const drawTable = (doc, headers, rows, options = {}) => {
       return y + rowHeight
     }
 
-    doc.rect(leftMargin, y, tableWidth, rowHeight).stroke("#dddddd")
+    doc.rect(leftMargin, y, tableWidth, rowHeight).stroke("#ddd")
     if (isHeader) {
-      doc.rect(leftMargin, y, tableWidth, rowHeight).fill("#f5f5f5")
+      doc.rect(leftMargin, y, tableWidth, rowHeight).fill(GREEN)
     }
 
     let x = leftMargin
     cells.forEach((cell, i) => {
       const w = widths[i]
-      doc.fillColor(isHeader ? "#333333" : "#555555")
+      doc.fillColor(isHeader ? "#fff" : "#333")
         .font(isHeader ? "Helvetica-Bold" : "Helvetica")
         .fontSize(fontSize)
         .text(String(cell), x + cellPadding, y + cellPadding, {
@@ -133,7 +233,7 @@ const drawTable = (doc, headers, rows, options = {}) => {
       x += w
     })
 
-    doc.fillColor("#000000")
+    doc.fillColor("#000")
     return y + rowHeight
   }
 
@@ -196,7 +296,7 @@ const generateVentasPeriodo = async (doc, params) => {
 
   const total = rows.reduce((sum, r) => sum + parseFloat(r.total_ventas), 0)
   doc.moveDown(0.5)
-  doc.fontSize(10).font("Helvetica-Bold").text(`Total General: ${formatCurrency(total)}`, { align: "right" })
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(GREEN).text(`Total General: ${formatCurrency(total)}`, { align: "right" }).fillColor("#000")
 
   return total
 }
@@ -224,7 +324,7 @@ const generateProductosMasVendidos = async (doc, params) => {
 
   const total = rows.reduce((sum, r) => sum + parseFloat(r.total_ventas), 0)
   doc.moveDown(0.5)
-  doc.fontSize(10).font("Helvetica-Bold").text(`Total General: ${formatCurrency(total)}`, { align: "right" })
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(GREEN).text(`Total General: ${formatCurrency(total)}`, { align: "right" }).fillColor("#000")
 
   return total
 }
@@ -250,7 +350,7 @@ const generateVentasPorCategoria = async (doc, params) => {
 
   const total = rows.reduce((sum, r) => sum + parseFloat(r.total_ventas), 0)
   doc.moveDown(0.5)
-  doc.fontSize(10).font("Helvetica-Bold").text(`Total General: ${formatCurrency(total)}`, { align: "right" })
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(GREEN).text(`Total General: ${formatCurrency(total)}`, { align: "right" }).fillColor("#000")
 
   return total
 }
@@ -276,7 +376,7 @@ const generateOcupacionMesas = async (doc, params) => {
 
   const total = rows.reduce((sum, r) => sum + parseFloat(r.total_ventas_mesa), 0)
   doc.moveDown(0.5)
-  doc.fontSize(10).font("Helvetica-Bold").text(`Total General: ${formatCurrency(total)}`, { align: "right" })
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(GREEN).text(`Total General: ${formatCurrency(total)}`, { align: "right" }).fillColor("#000")
 
   return total
 }
@@ -302,7 +402,7 @@ const generateRendimientoMeseros = async (doc, params) => {
 
   const total = rows.reduce((sum, r) => sum + parseFloat(r.total_ventas), 0)
   doc.moveDown(0.5)
-  doc.fontSize(10).font("Helvetica-Bold").text(`Total General Ventas: ${formatCurrency(total)}`, { align: "right" })
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(GREEN).text(`Total General Ventas: ${formatCurrency(total)}`, { align: "right" }).fillColor("#000")
 
   return total
 }
@@ -330,7 +430,7 @@ const generateHistorialPedidos = async (doc, params) => {
 
   const total = rows.reduce((sum, r) => sum + parseFloat(r.total), 0)
   doc.moveDown(0.5)
-  doc.fontSize(10).font("Helvetica-Bold").text(`Total General: ${formatCurrency(total)}`, { align: "right" })
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(GREEN).text(`Total General: ${formatCurrency(total)}`, { align: "right" }).fillColor("#000")
   doc.fontSize(9).font("Helvetica").text(`Total Pedidos: ${rows.length}`, { align: "right" })
 
   return total
@@ -359,7 +459,7 @@ const generateHistorialPagos = async (doc, params) => {
 
   const total = rows.reduce((sum, r) => sum + parseFloat(r.monto), 0)
   doc.moveDown(0.5)
-  doc.fontSize(10).font("Helvetica-Bold").text(`Total General Cobrado: ${formatCurrency(total)}`, { align: "right" })
+  doc.fontSize(10).font("Helvetica-Bold").fillColor(GREEN).text(`Total General Cobrado: ${formatCurrency(total)}`, { align: "right" }).fillColor("#000")
   doc.fontSize(9).font("Helvetica").text(`Total Transacciones: ${rows.length}`, { align: "right" })
 
   return total
@@ -438,7 +538,7 @@ const generateCierreCaja = async (doc, params) => {
 
   const totalPagado = (data.pagos_por_metodo || []).reduce((sum, p) => sum + parseFloat(p.total), 0)
   doc.moveDown(0.5)
-  doc.fontSize(11).font("Helvetica-Bold").text(`Total Cobrado: ${formatCurrency(totalPagado)}`, { align: "right" })
+  doc.fontSize(11).font("Helvetica-Bold").fillColor(GREEN).text(`Total Cobrado: ${formatCurrency(totalPagado)}`, { align: "right" }).fillColor("#000")
 
   return totalPagado || parseFloat(r.total_ventas_brutas)
 }
@@ -476,7 +576,7 @@ const generatePDF = async (tipo, params, usuario_id) => {
     totalGenerado = await generator(doc, { ...params, fecha_inicio, fecha_fin })
   }
 
-  generateFooter(doc)
+  generateFooter(doc, config)
   doc.end()
 
   return new Promise((resolve, reject) => {
@@ -573,7 +673,10 @@ const downloadReport = async (req, res) => {
       return res.status(404).json({ message: "Archivo PDF no encontrado" })
     }
 
-    res.download(filepath, `${report.tipo}_${report.id}.pdf`)
+    const fecha = (report.fecha_inicio || "").split("T")[0] || new Date().toISOString().split("T")[0]
+    const filename = `${report.tipo}_${fecha}.pdf`
+    res.setHeader("X-Filename", encodeURIComponent(filename))
+    res.download(filepath, filename)
   } catch (error) {
     console.error("Error al descargar reporte:", error)
     res.status(500).json({ message: "Error al descargar reporte" })

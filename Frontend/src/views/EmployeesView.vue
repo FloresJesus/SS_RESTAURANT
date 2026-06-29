@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
-import { apiFetch } from '@/utils/api'
+import { apiFetch, API_BASE } from '@/utils/api'
 import { required, onlyLetters, isEmail, minLength, composeValidators } from '@/utils/validators'
 import { useFormValidation } from '@/composables/useFormValidation'
 import FormField from '@/components/FormField.vue'
@@ -149,13 +149,13 @@ const saveEmployee = async () => {
 
   try {
     if (editingEmployee.value) {
-      await apiFetch(`/api/users/${editingEmployee.value.id}`, {
+      await apiFetch(`${API_BASE}/users/${editingEmployee.value.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
     } else {
-      await apiFetch('/api/users', {
+      await apiFetch(`${API_BASE}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -175,7 +175,7 @@ const saveEmployee = async () => {
 
 const toggleStatus = async (employee) => {
   try {
-    await apiFetch(`/api/users/${employee.id}`, {
+    await apiFetch(`${API_BASE}/users/${employee.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -200,7 +200,7 @@ const deleteUser = async (employee) => {
   }
 
   try {
-    await apiFetch(`/api/users/${employee.id}`, {
+    await apiFetch(`${API_BASE}/users/${employee.id}`, {
       method: 'DELETE'
     })
     await loadEmployees()

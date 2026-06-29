@@ -1,5 +1,5 @@
 import { defineStore } from "pinia"
-import { apiFetch } from "@/utils/api"
+import { apiFetch, API_BASE } from "@/utils/api"
 
 type UserRole = 'admin' | 'cajero' | 'mesero' | 'cocina'
 
@@ -20,7 +20,7 @@ export const useUsersStore = defineStore("users", {
   actions: {
     async fetchUsers() {
       try {
-        const data = await apiFetch("/api/users")
+        const data = await apiFetch(`${API_BASE}/users`)
         this.users = data.map((user: any) => ({
           id: user.id,
           nombre: user.nombre,
@@ -35,21 +35,21 @@ export const useUsersStore = defineStore("users", {
       }
     },
     async createUser(user: any) {
-      return apiFetch("/api/users", {
+      return apiFetch(`${API_BASE}/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(user)
       })
     },
     async updateUser(id: number, user: any) {
-      return apiFetch(`/api/users/${id}`, {
+      return apiFetch(`${API_BASE}/users/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(user)
       })
     },
     async deleteUser(id: number) {
-      return apiFetch(`/api/users/${id}`, {
+      return apiFetch(`${API_BASE}/users/${id}`, {
         method: "DELETE"
       })
     }
